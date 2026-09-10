@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <radialGradient id="spaceGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="60%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#060B18" />
+    </radialGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="46" fill="#060B18" stroke="#00F0FF" stroke-width="2" />
+  <circle cx="50" cy="50" r="22" fill="url(#spaceGrad)" />
+  <ellipse cx="50" cy="50" rx="38" ry="14" fill="none" stroke="url(#ringGrad)" stroke-width="3" transform="rotate(-30 50 50)" />
+  <polygon points="50,18 53,28 63,30 54,36 57,46 50,40 43,46 46,36 37,30 47,28" fill="#FFFFFF" />
+</svg>
