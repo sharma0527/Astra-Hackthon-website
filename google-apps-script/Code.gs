@@ -2,32 +2,31 @@
  * ASTRA HACKATHON 2026
  * NRI INSTITUTE OF TECHNOLOGY × MTX × NRIIT CODING CLUB
  *
- * GOOGLE APPS SCRIPT
+ * GOOGLE APPS SCRIPT BACKEND
  *
- * DATABASE SHEET:
+ * DATABASE:
  * Form Responses 2
  *
  * FEATURES:
- * ✓ Unique Team ID
- * ✓ Unique Application ID
- * ✓ Sequential IDs
+ * ✓ Sequential Team ID
+ * ✓ Sequential Application ID
  * ✓ Duplicate Team Name detection
  * ✓ Duplicate Team Lead detection
  * ✓ Duplicate Roll Number detection
  * ✓ Duplicate Roll Number inside same team
- * ✓ Registration status
+ * ✓ SUBMITTED / DUPLICATE status
  * ✓ Confirmation email
- * ✓ Application tracking API
+ * ✓ Track Application API
  * ✓ Team member extraction
- * ✓ Masked email in public API
+ * ✓ Masked public email
  * ✓ LockService protection
  * ✓ Strictly uses Form Responses 2
  ************************************************************/
 
 
-/************************************************************
- * CONFIGURATION
- ************************************************************/
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
 
 const CONFIG = {
 
@@ -38,32 +37,22 @@ const CONFIG = {
   API_URL:
     "https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec",
 
-  /*
-   * IMPORTANT:
-   * Replace this with your actual Vercel Track Application URL.
-   *
-   * Example:
-   * https://astra-hackathon.vercel.app/track-application
-   */
   TRACKING_URL:
-    "https://YOUR-VERCEL-DOMAIN.vercel.app/track-application",
+    "https://astra-hackthon-website.vercel.app/track-application",
 
   /*
-   * Replace with the organizer's email address.
+   * CHANGE ONLY THIS EMAIL.
    */
   ORGANIZER_EMAIL:
-    "YOUR-ORGANIZER-EMAIL@gmail.com",
+    "YOUR-REAL-ORGANIZER-EMAIL@gmail.com",
 
   /*
    * IMPORTANT:
-   * Your Google Form responses are stored here.
+   * Your actual Google Sheet tab is Form Responses 2.
    */
   SHEET_NAME:
     "Form Responses 2",
 
-  /*
-   * System columns.
-   */
   TEAM_ID:
     "Team ID",
 
@@ -81,52 +70,25 @@ const CONFIG = {
 };
 
 
-/************************************************************
- * FORM SUBMISSION TRIGGER
- *
- * INSTALLABLE TRIGGER:
- *
- * Function:
- * organizeRegistrations
- *
- * Event source:
- * From spreadsheet
- *
- * Event type:
- * On form submit
- ************************************************************/
+/* =========================================================
+   FORM SUBMISSION TRIGGER
+   ========================================================= */
 
 function organizeRegistrations(e) {
 
   if (!e || !e.range) {
-
     throw new Error(
-      "This function must be triggered by a Google Sheet On form submit event."
+      "organizeRegistrations must run from a spreadsheet On form submit trigger."
     );
-
   }
 
+  const sheet = e.range.getSheet();
+  const row = e.range.getRow();
 
   /*
-   * Get the exact sheet where the form submission occurred.
+   * ONLY Form Responses 2 is processed.
    */
-  const sheet =
-    e.range.getSheet();
-
-
-  const row =
-    e.range.getRow();
-
-
-  /*
-   * IMPORTANT:
-   * Only process Form Responses 2.
-   *
-   * This prevents another sheet from being processed accidentally.
-   */
-  if (
-    sheet.getName() !== CONFIG.SHEET_NAME
-  ) {
+  if (sheet.getName() !== CONFIG.SHEET_NAME) {
 
     console.log(
       "Ignored submission from sheet: " +
@@ -134,108 +96,63 @@ function organizeRegistrations(e) {
     );
 
     return;
-
   }
 
-
   /*
-   * Make sure all system columns exist.
+   * Ensure system columns exist.
    */
   ensureSystemColumns(sheet);
 
-
   /*
-   * Lock the script so two submissions at the same
-   * time cannot receive the same ID.
+   * Prevent duplicate IDs during simultaneous submissions.
    */
-  const lock =
-    LockService.getScriptLock();
-
+  const lock = LockService.getScriptLock();
 
   try {
 
     lock.waitLock(30000);
 
+    const headers = getHeaders(sheet);
 
-    /*
-     * Read the latest headers.
-     */
-    const headers =
-      getHeaders(sheet);
-
-
-    /*
-     * Find system columns.
-     *
-     * findColumn() returns ZERO-BASED indexes.
-     */
     const teamIdColumn =
-      findColumn(
-        headers,
-        CONFIG.TEAM_ID
-      );
-
+      findColumn(headers, CONFIG.TEAM_ID);
 
     const applicationIdColumn =
-      findColumn(
-        headers,
-        CONFIG.APPLICATION_ID
-      );
-
+      findColumn(headers, CONFIG.APPLICATION_ID);
 
     const statusColumn =
-      findColumn(
-        headers,
-        CONFIG.STATUS
-      );
-
+      findColumn(headers, CONFIG.STATUS);
 
     const lastUpdatedColumn =
-      findColumn(
-        headers,
-        CONFIG.LAST_UPDATED
-      );
+      findColumn(headers, CONFIG.LAST_UPDATED);
 
-
-    /*
-     * Verify required columns.
-     */
     if (
       teamIdColumn === -1 ||
       applicationIdColumn === -1 ||
       statusColumn === -1 ||
       lastUpdatedColumn === -1
     ) {
-
       throw new Error(
         "Required system columns are missing."
       );
-
     }
 
-
     /*
-     * Check if this row has already been processed.
+     * If already processed, do nothing.
      */
     const existingTeamId =
-      sheet
-        .getRange(
-          row,
-          teamIdColumn + 1
-        )
-        .getDisplayValue()
-        .trim();
-
+      String(
+        sheet
+          .getRange(row, teamIdColumn + 1)
+          .getDisplayValue()
+      ).trim();
 
     const existingApplicationId =
-      sheet
-        .getRange(
-          row,
-          applicationIdColumn + 1
-        )
-        .getDisplayValue()
-        .trim();
-
+      String(
+        sheet
+          .getRange(row, applicationIdColumn + 1)
+          .getDisplayValue()
+      ).trim();
 
     if (
       existingTeamId &&
@@ -243,18 +160,17 @@ function organizeRegistrations(e) {
     ) {
 
       console.log(
-        "Registration already processed: " +
+        "Already processed: " +
         existingApplicationId
       );
 
       return;
-
     }
 
 
-    /******************************************************
-     * DUPLICATE CHECK
-     ******************************************************/
+    /* =====================================================
+       DUPLICATE CHECK
+       ===================================================== */
 
     const duplicateResult =
       checkForDuplicates(
@@ -263,14 +179,8 @@ function organizeRegistrations(e) {
         headers
       );
 
+    if (duplicateResult.duplicate) {
 
-    if (
-      duplicateResult.duplicate
-    ) {
-
-      /*
-       * Mark registration as DUPLICATE.
-       */
       sheet
         .getRange(
           row,
@@ -278,10 +188,6 @@ function organizeRegistrations(e) {
         )
         .setValue("DUPLICATE");
 
-
-      /*
-       * Update timestamp.
-       */
       sheet
         .getRange(
           row,
@@ -289,13 +195,8 @@ function organizeRegistrations(e) {
         )
         .setValue(new Date());
 
-
       SpreadsheetApp.flush();
 
-
-      /*
-       * Send duplicate alert only to organizer.
-       */
       sendDuplicateAlert(
         sheet,
         row,
@@ -304,68 +205,45 @@ function organizeRegistrations(e) {
         headers
       );
 
-
       console.log(
         "Duplicate registration rejected."
       );
 
-
       return;
-
     }
 
 
-    /******************************************************
-     * GENERATE UNIQUE NUMBER
-     ******************************************************/
+    /* =====================================================
+       GENERATE UNIQUE ID
+       ===================================================== */
 
     const nextNumber =
       getNextTeamNumber(sheet);
 
+    const number =
+      String(nextNumber).padStart(3, "0");
 
-    const formattedNumber =
-      String(nextNumber)
-        .padStart(3, "0");
-
-
-    /*
-     * Team ID:
-     *
-     * ASTRA-TEAM-001
-     */
     const teamId =
-      "ASTRA-TEAM-" +
-      formattedNumber;
+      "ASTRA-TEAM-" + number;
+
+    const applicationId =
+      "ASTRA-2026-TEAM" + number;
 
 
     /*
-     * Application ID:
-     *
-     * ASTRA-2026-TEAM001
+     * Final collision protection.
      */
-    const applicationId =
-      "ASTRA-2026-TEAM" +
-      formattedNumber;
-
-
-    /******************************************************
-     * FINAL SAFETY CHECK
-     ******************************************************/
-
     if (
       applicationIdExists(
         sheet,
         applicationId
       )
     ) {
-
       throw new Error(
-        "Generated Application ID already exists: " +
+        "Application ID already exists: " +
         applicationId
       );
-
     }
-
 
     if (
       teamIdExists(
@@ -373,18 +251,16 @@ function organizeRegistrations(e) {
         teamId
       )
     ) {
-
       throw new Error(
-        "Generated Team ID already exists: " +
+        "Team ID already exists: " +
         teamId
       );
-
     }
 
 
-    /******************************************************
-     * WRITE TEAM ID
-     ******************************************************/
+    /* =====================================================
+       WRITE IDs + STATUS
+       ===================================================== */
 
     sheet
       .getRange(
@@ -394,11 +270,6 @@ function organizeRegistrations(e) {
       .setNumberFormat("@")
       .setValue(teamId);
 
-
-    /******************************************************
-     * WRITE APPLICATION ID
-     ******************************************************/
-
     sheet
       .getRange(
         row,
@@ -407,22 +278,12 @@ function organizeRegistrations(e) {
       .setNumberFormat("@")
       .setValue(applicationId);
 
-
-    /******************************************************
-     * WRITE STATUS
-     ******************************************************/
-
     sheet
       .getRange(
         row,
         statusColumn + 1
       )
       .setValue("SUBMITTED");
-
-
-    /******************************************************
-     * WRITE LAST UPDATED
-     ******************************************************/
 
     sheet
       .getRange(
@@ -431,13 +292,12 @@ function organizeRegistrations(e) {
       )
       .setValue(new Date());
 
-
     SpreadsheetApp.flush();
 
 
-    /******************************************************
-     * READ SUBMITTED DATA
-     ******************************************************/
+    /* =====================================================
+       READ FORM DATA
+       ===================================================== */
 
     const rowValues =
       sheet
@@ -449,26 +309,19 @@ function organizeRegistrations(e) {
         )
         .getDisplayValues()[0];
 
-
     const teamName =
       getField(
         headers,
         rowValues,
-        [
-          "Team Name"
-        ]
+        ["Team Name"]
       );
-
 
     const teamLead =
       getField(
         headers,
         rowValues,
-        [
-          "Team Lead Name"
-        ]
+        ["Team Lead Name"]
       );
-
 
     const email =
       getField(
@@ -480,40 +333,31 @@ function organizeRegistrations(e) {
         ]
       );
 
-
     const branch =
       getField(
         headers,
         rowValues,
-        [
-          "Team Lead Branch"
-        ]
+        ["Team Lead Branch"]
       );
-
 
     const problemStatement =
       getField(
         headers,
         rowValues,
-        [
-          "PROBLEM STATEMENT"
-        ]
+        ["PROBLEM STATEMENT"]
       );
-
 
     const domain =
       getField(
         headers,
         rowValues,
-        [
-          "Problem Statement Domain"
-        ]
+        ["Problem Statement Domain"]
       );
 
 
-    /******************************************************
-     * SEND CONFIRMATION EMAIL
-     ******************************************************/
+    /* =====================================================
+       SEND CONFIRMATION EMAIL
+       ===================================================== */
 
     if (
       email &&
@@ -521,128 +365,68 @@ function organizeRegistrations(e) {
     ) {
 
       sendConfirmationEmail({
-
-        email:
-          email,
-
-        teamName:
-          teamName,
-
-        teamLead:
-          teamLead,
-
-        teamId:
-          teamId,
-
-        applicationId:
-          applicationId,
-
-        branch:
-          branch,
-
-        problemStatement:
-          problemStatement,
-
-        domain:
-          domain
-
+        email: email,
+        teamName: teamName,
+        teamLead: teamLead,
+        teamId: teamId,
+        applicationId: applicationId,
+        branch: branch,
+        problemStatement: problemStatement,
+        domain: domain
       });
 
     }
-
-
-    /******************************************************
-     * LOG SUCCESS
-     ******************************************************/
-
-    console.log(
-      "===================================="
-    );
 
 
     console.log(
       "ASTRA REGISTRATION SUCCESS"
     );
 
-
     console.log(
-      "Sheet: " +
-      sheet.getName()
+      "Team ID: " + teamId
     );
 
-
     console.log(
-      "Row: " +
-      row
+      "Application ID: " + applicationId
     );
-
-
-    console.log(
-      "Team ID: " +
-      teamId
-    );
-
-
-    console.log(
-      "Application ID: " +
-      applicationId
-    );
-
 
     console.log(
       "Status: SUBMITTED"
     );
 
+  }
 
-    console.log(
-      "===================================="
-    );
-
-
-  } finally {
+  finally {
 
     try {
-
       lock.releaseLock();
-
     } catch (error) {
-
       console.log(
         "Lock release error: " +
         error
       );
-
     }
 
   }
-
 }
 
 
-/************************************************************
- * ENSURE SYSTEM COLUMNS
- ************************************************************/
+/* =========================================================
+   ENSURE SYSTEM COLUMNS
+   ========================================================= */
 
 function ensureSystemColumns(sheet) {
 
   let headers =
     getHeaders(sheet);
 
-
   const requiredColumns = [
-
     CONFIG.TEAM_ID,
-
     CONFIG.APPLICATION_ID,
-
     CONFIG.STATUS,
-
     CONFIG.LAST_UPDATED,
-
     CONFIG.REVIEW_NOTES
-
   ];
-
 
   requiredColumns.forEach(
     function(columnName) {
@@ -659,12 +443,10 @@ function ensureSystemColumns(sheet) {
           }
         );
 
-
       if (!exists) {
 
         const newColumn =
           sheet.getLastColumn() + 1;
-
 
         sheet
           .getRange(
@@ -674,10 +456,8 @@ function ensureSystemColumns(sheet) {
           .setValue(columnName)
           .setFontWeight("bold");
 
-
         headers =
           getHeaders(sheet);
-
       }
 
     }
@@ -686,24 +466,18 @@ function ensureSystemColumns(sheet) {
 }
 
 
-/************************************************************
- * GET HEADERS
- ************************************************************/
+/* =========================================================
+   GET HEADERS
+   ========================================================= */
 
 function getHeaders(sheet) {
 
   const lastColumn =
     sheet.getLastColumn();
 
-
-  if (
-    lastColumn < 1
-  ) {
-
+  if (lastColumn < 1) {
     return [];
-
   }
-
 
   return sheet
     .getRange(
@@ -715,22 +489,18 @@ function getHeaders(sheet) {
     .getDisplayValues()[0]
     .map(
       function(header) {
-
         return String(
           header || ""
         ).trim();
-
       }
     );
-
 }
 
 
-/************************************************************
- * FIND COLUMN
- *
- * Returns ZERO-BASED index.
- ************************************************************/
+/* =========================================================
+   FIND COLUMN
+   Returns ZERO-BASED index.
+   ========================================================= */
 
 function findColumn(
   headers,
@@ -742,7 +512,6 @@ function findColumn(
       headerName
     );
 
-
   return headers.findIndex(
     function(header) {
 
@@ -753,13 +522,12 @@ function findColumn(
 
     }
   );
-
 }
 
 
-/************************************************************
- * NORMALIZE HEADER
- ************************************************************/
+/* =========================================================
+   NORMALIZE HEADER
+   ========================================================= */
 
 function normalizeHeader(value) {
 
@@ -767,18 +535,14 @@ function normalizeHeader(value) {
     value || ""
   )
     .toLowerCase()
-    .replace(
-      /\s+/g,
-      " "
-    )
+    .replace(/\s+/g, " ")
     .trim();
-
 }
 
 
-/************************************************************
- * NORMALIZE VALUE
- ************************************************************/
+/* =========================================================
+   NORMALIZE VALUE
+   ========================================================= */
 
 function normalizeValue(value) {
 
@@ -787,17 +551,13 @@ function normalizeValue(value) {
   )
     .toLowerCase()
     .trim()
-    .replace(
-      /\s+/g,
-      " "
-    );
-
+    .replace(/\s+/g, " ");
 }
 
 
-/************************************************************
- * GET FIELD
- ************************************************************/
+/* =========================================================
+   GET FIELD
+   ========================================================= */
 
 function getField(
   headers,
@@ -817,44 +577,27 @@ function getField(
         possibleNames[i]
       );
 
-
-    if (
-      column !== -1
-    ) {
+    if (column !== -1) {
 
       const value =
         String(
           rowValues[column] || ""
         ).trim();
 
-
-      if (
-        value
-      ) {
-
+      if (value) {
         return value;
-
       }
 
     }
-
   }
 
-
   return "";
-
 }
 
 
-/************************************************************
- * GET NEXT TEAM NUMBER
- *
- * Uses:
- * 1. Existing Team IDs in Form Responses 2
- * 2. Script Properties counter
- *
- * This prevents accidental ID reuse.
- ************************************************************/
+/* =========================================================
+   GET NEXT TEAM NUMBER
+   ========================================================= */
 
 function getNextTeamNumber(sheet) {
 
@@ -862,109 +605,74 @@ function getNextTeamNumber(sheet) {
     PropertiesService
       .getScriptProperties();
 
-
-  const storedCounter =
-    properties.getProperty(
-      "ASTRA_LAST_TEAM_NUMBER"
+  const stored =
+    parseInt(
+      properties.getProperty(
+        "ASTRA_LAST_TEAM_NUMBER"
+      ) || "0",
+      10
     );
 
+  const storedNumber =
+    isNaN(stored)
+      ? 0
+      : stored;
 
-  let storedNumber =
-    storedCounter
-      ? parseInt(
-          storedCounter,
-          10
-        )
-      : 0;
+  const highest =
+    findHighestTeamNumber(sheet);
 
-
-  if (
-    isNaN(storedNumber)
-  ) {
-
-    storedNumber = 0;
-
-  }
-
-
-  const highestInSheet =
-    findHighestTeamNumber(
-      sheet
-    );
-
-
-  const nextNumber =
+  const next =
     Math.max(
       storedNumber,
-      highestInSheet
+      highest
     ) + 1;
-
 
   properties.setProperty(
     "ASTRA_LAST_TEAM_NUMBER",
-    String(nextNumber)
+    String(next)
   );
 
-
-  return nextNumber;
-
+  return next;
 }
 
 
-/************************************************************
- * FIND HIGHEST TEAM NUMBER
- ************************************************************/
+/* =========================================================
+   FIND HIGHEST TEAM NUMBER
+   ========================================================= */
 
-function findHighestTeamNumber(
-  sheet
-) {
+function findHighestTeamNumber(sheet) {
 
   const headers =
     getHeaders(sheet);
 
-
-  const teamColumn =
+  const column =
     findColumn(
       headers,
       CONFIG.TEAM_ID
     );
 
-
-  if (
-    teamColumn === -1
-  ) {
-
+  if (column === -1) {
     return 0;
-
   }
-
 
   const lastRow =
     sheet.getLastRow();
 
-
-  if (
-    lastRow < 2
-  ) {
-
+  if (lastRow < 2) {
     return 0;
-
   }
-
 
   const values =
     sheet
       .getRange(
         2,
-        teamColumn + 1,
+        column + 1,
         lastRow - 1,
         1
       )
       .getDisplayValues();
 
-
   let highest = 0;
-
 
   values.forEach(
     function(row) {
@@ -974,16 +682,12 @@ function findHighestTeamNumber(
           row[0] || ""
         ).trim();
 
-
       const match =
         value.match(
           /^ASTRA-TEAM-(\d+)$/i
         );
 
-
-      if (
-        match
-      ) {
+      if (match) {
 
         const number =
           parseInt(
@@ -991,13 +695,10 @@ function findHighestTeamNumber(
             10
           );
 
-
         if (
           number > highest
         ) {
-
           highest = number;
-
         }
 
       }
@@ -1005,15 +706,13 @@ function findHighestTeamNumber(
     }
   );
 
-
   return highest;
-
 }
 
 
-/************************************************************
- * CHECK APPLICATION ID EXISTS
- ************************************************************/
+/* =========================================================
+   APPLICATION ID EXISTS
+   ========================================================= */
 
 function applicationIdExists(
   sheet,
@@ -1023,35 +722,22 @@ function applicationIdExists(
   const headers =
     getHeaders(sheet);
 
-
   const column =
     findColumn(
       headers,
       CONFIG.APPLICATION_ID
     );
 
-
-  if (
-    column === -1
-  ) {
-
+  if (column === -1) {
     return false;
-
   }
-
 
   const lastRow =
     sheet.getLastRow();
 
-
-  if (
-    lastRow < 2
-  ) {
-
+  if (lastRow < 2) {
     return false;
-
   }
-
 
   const values =
     sheet
@@ -1063,12 +749,10 @@ function applicationIdExists(
       )
       .getDisplayValues();
 
-
   const target =
     normalizeApplicationId(
       applicationId
     );
-
 
   return values.some(
     function(row) {
@@ -1076,19 +760,17 @@ function applicationIdExists(
       return (
         normalizeApplicationId(
           row[0]
-        ) ===
-        target
+        ) === target
       );
 
     }
   );
-
 }
 
 
-/************************************************************
- * CHECK TEAM ID EXISTS
- ************************************************************/
+/* =========================================================
+   TEAM ID EXISTS
+   ========================================================= */
 
 function teamIdExists(
   sheet,
@@ -1098,35 +780,22 @@ function teamIdExists(
   const headers =
     getHeaders(sheet);
 
-
   const column =
     findColumn(
       headers,
       CONFIG.TEAM_ID
     );
 
-
-  if (
-    column === -1
-  ) {
-
+  if (column === -1) {
     return false;
-
   }
-
 
   const lastRow =
     sheet.getLastRow();
 
-
-  if (
-    lastRow < 2
-  ) {
-
+  if (lastRow < 2) {
     return false;
-
   }
-
 
   const values =
     sheet
@@ -1138,12 +807,8 @@ function teamIdExists(
       )
       .getDisplayValues();
 
-
   const target =
-    normalizeValue(
-      teamId
-    );
-
+    normalizeValue(teamId);
 
   return values.some(
     function(row) {
@@ -1151,40 +816,32 @@ function teamIdExists(
       return (
         normalizeValue(
           row[0]
-        ) ===
-        target
+        ) === target
       );
 
     }
   );
-
 }
 
 
-/************************************************************
- * NORMALIZE APPLICATION ID
- ************************************************************/
+/* =========================================================
+   NORMALIZE APPLICATION ID
+   ========================================================= */
 
-function normalizeApplicationId(
-  value
-) {
+function normalizeApplicationId(value) {
 
   return String(
     value || ""
   )
     .trim()
     .toUpperCase()
-    .replace(
-      /\s+/g,
-      ""
-    );
-
+    .replace(/\s+/g, "");
 }
 
 
-/************************************************************
- * DUPLICATE CHECKER
- ************************************************************/
+/* =========================================================
+   DUPLICATE CHECKER
+   ========================================================= */
 
 function checkForDuplicates(
   sheet,
@@ -1195,10 +852,7 @@ function checkForDuplicates(
   const lastRow =
     sheet.getLastRow();
 
-
-  if (
-    lastRow < 2
-  ) {
+  if (lastRow < 2) {
 
     return {
       duplicate: false,
@@ -1208,10 +862,6 @@ function checkForDuplicates(
 
   }
 
-
-  /*
-   * Read current submission.
-   */
   const currentValues =
     sheet
       .getRange(
@@ -1222,30 +872,23 @@ function checkForDuplicates(
       )
       .getDisplayValues()[0];
 
-
   const currentTeamName =
     normalizeValue(
       getField(
         headers,
         currentValues,
-        [
-          "Team Name"
-        ]
+        ["Team Name"]
       )
     );
-
 
   const currentTeamLead =
     normalizeValue(
       getField(
         headers,
         currentValues,
-        [
-          "Team Lead Name"
-        ]
+        ["Team Lead Name"]
       )
     );
-
 
   const currentRollNumbers =
     getAllRollNumbers(
@@ -1254,15 +897,13 @@ function checkForDuplicates(
     );
 
 
-  /******************************************************
-   * DUPLICATE ROLL NUMBER INSIDE SAME TEAM
-   ******************************************************/
-
+  /*
+   * Duplicate roll numbers within same team.
+   */
   const uniqueRollNumbers =
     new Set(
       currentRollNumbers
     );
-
 
   if (
     uniqueRollNumbers.size !==
@@ -1270,25 +911,19 @@ function checkForDuplicates(
   ) {
 
     return {
-
-      duplicate:
-        true,
-
+      duplicate: true,
       reason:
         "Duplicate Roll Number within the same team.",
-
       details:
         currentRollNumbers.join(", ")
-
     };
 
   }
 
 
-  /******************************************************
-   * CHECK PREVIOUS REGISTRATIONS
-   ******************************************************/
-
+  /*
+   * Compare previous registrations.
+   */
   for (
     let rowNumber = 2;
     rowNumber <= lastRow;
@@ -1298,11 +933,8 @@ function checkForDuplicates(
     if (
       rowNumber === currentRow
     ) {
-
       continue;
-
     }
-
 
     const previousValues =
       sheet
@@ -1315,99 +947,73 @@ function checkForDuplicates(
         .getDisplayValues()[0];
 
 
-    /****************************************************
-     * TEAM NAME
-     ****************************************************/
+    /* TEAM NAME */
 
     const previousTeamName =
       normalizeValue(
         getField(
           headers,
           previousValues,
-          [
-            "Team Name"
-          ]
+          ["Team Name"]
         )
       );
-
 
     if (
       currentTeamName &&
       previousTeamName &&
       currentTeamName ===
-        previousTeamName
+      previousTeamName
     ) {
 
       return {
-
-        duplicate:
-          true,
-
+        duplicate: true,
         reason:
           "Duplicate Team Name.",
-
         details:
           getField(
             headers,
             previousValues,
-            [
-              "Team Name"
-            ]
+            ["Team Name"]
           )
-
       };
 
     }
 
 
-    /****************************************************
-     * TEAM LEAD
-     ****************************************************/
+    /* TEAM LEAD */
 
     const previousTeamLead =
       normalizeValue(
         getField(
           headers,
           previousValues,
-          [
-            "Team Lead Name"
-          ]
+          ["Team Lead Name"]
         )
       );
-
 
     if (
       currentTeamLead &&
       previousTeamLead &&
       currentTeamLead ===
-        previousTeamLead
+      previousTeamLead
     ) {
 
       return {
-
-        duplicate:
-          true,
-
+        duplicate: true,
         reason:
           "Duplicate Team Lead.",
-
         details:
           getField(
             headers,
             previousValues,
-            [
-              "Team Lead Name"
-            ]
+            ["Team Lead Name"]
           )
-
       };
 
     }
 
 
-    /****************************************************
-     * ROLL NUMBERS
-     ****************************************************/
+    /* ROLL NUMBERS */
 
     const previousRollNumbers =
       getAllRollNumbers(
@@ -1415,12 +1021,10 @@ function checkForDuplicates(
         previousValues
       );
 
-
     const previousRollSet =
       new Set(
         previousRollNumbers
       );
-
 
     for (
       let i = 0;
@@ -1435,16 +1039,11 @@ function checkForDuplicates(
       ) {
 
         return {
-
-          duplicate:
-            true,
-
+          duplicate: true,
           reason:
             "Duplicate Roll Number.",
-
           details:
             currentRollNumbers[i]
-
         };
 
       }
@@ -1453,30 +1052,17 @@ function checkForDuplicates(
 
   }
 
-
   return {
-
-    duplicate:
-      false,
-
-    reason:
-      "",
-
-    details:
-      ""
-
+    duplicate: false,
+    reason: "",
+    details: ""
   };
-
 }
 
 
-/************************************************************
- * GET ALL ROLL NUMBERS
- *
- * Includes:
- * ✓ Team Lead Roll Number
- * ✓ Team Member Roll Numbers
- ************************************************************/
+/* =========================================================
+   GET ALL ROLL NUMBERS
+   ========================================================= */
 
 function getAllRollNumbers(
   headers,
@@ -1485,27 +1071,19 @@ function getAllRollNumbers(
 
   const rolls = [];
 
-
   headers.forEach(
     function(header, index) {
 
       const normalized =
-        normalizeHeader(
-          header
-        )
-        .replace(
-          /[^a-z0-9]/g,
-          ""
-        );
-
+        normalizeHeader(header)
+          .replace(
+            /[^a-z0-9]/g,
+            ""
+          );
 
       if (
-        normalized.includes(
-          "rollnumber"
-        ) ||
-        normalized.includes(
-          "rollno"
-        )
+        normalized.includes("rollnumber") ||
+        normalized.includes("rollno")
       ) {
 
         const value =
@@ -1513,15 +1091,10 @@ function getAllRollNumbers(
             rowValues[index] || ""
           ).trim();
 
-
-        if (
-          value
-        ) {
+        if (value) {
 
           rolls.push(
-            normalizeValue(
-              value
-            )
+            normalizeValue(value)
           );
 
         }
@@ -1531,19 +1104,15 @@ function getAllRollNumbers(
     }
   );
 
-
   return rolls;
-
 }
 
 
-/************************************************************
- * SEND CONFIRMATION EMAIL
- ************************************************************/
+/* =========================================================
+   CONFIRMATION EMAIL
+   ========================================================= */
 
-function sendConfirmationEmail(
-  data
-) {
+function sendConfirmationEmail(data) {
 
   const trackingLink =
     CONFIG.TRACKING_URL +
@@ -1552,19 +1121,13 @@ function sendConfirmationEmail(
       data.applicationId
     );
 
-
   const subject =
     "ASTRA Hackathon 2026 | Registration Received | " +
     data.applicationId;
 
-
   const plainText =
-
     "Hello " +
-    (
-      data.teamLead ||
-      "Team Lead"
-    ) +
+    (data.teamLead || "Team Lead") +
     ",\n\n" +
 
     "Your registration for the ASTRA Hackathon 2026 has been successfully received.\n\n" +
@@ -1573,10 +1136,7 @@ function sendConfirmationEmail(
     "------------------------------\n" +
 
     "Team Name: " +
-    (
-      data.teamName ||
-      "N/A"
-    ) +
+    (data.teamName || "N/A") +
     "\n" +
 
     "Team ID: " +
@@ -1590,27 +1150,18 @@ function sendConfirmationEmail(
     "Status: SUBMITTED\n" +
 
     "Team Lead: " +
-    (
-      data.teamLead ||
-      "N/A"
-    ) +
+    (data.teamLead || "N/A") +
     "\n" +
 
     "Branch: " +
-    (
-      data.branch ||
-      "N/A"
-    ) +
+    (data.branch || "N/A") +
     "\n\n" +
 
-    "APPLICATION TRACKING\n" +
-    "------------------------------\n" +
-
+    "Track Application:\n" +
     trackingLink +
     "\n\n" +
 
     "Please save your Application ID:\n" +
-
     data.applicationId +
     "\n\n" +
 
@@ -1624,20 +1175,13 @@ function sendConfirmationEmail(
 
 
   const htmlBody = `
-
 <!DOCTYPE html>
-
 <html>
-
 <head>
-
 <meta charset="UTF-8">
-
 <meta name="viewport"
 content="width=device-width,initial-scale=1.0">
-
 </head>
-
 
 <body style="
 margin:0;
@@ -1646,13 +1190,11 @@ background:#f3f6fa;
 font-family:Arial,Helvetica,sans-serif;
 ">
 
-
 <div style="
 max-width:650px;
 margin:auto;
 padding:30px 15px;
 ">
-
 
 <div style="
 background:#111827;
@@ -1661,29 +1203,21 @@ padding:30px;
 border-radius:16px 16px 0 0;
 ">
 
-
 <h1 style="
 margin:0;
 font-size:28px;
 ">
-
 ASTRA HACKATHON 2026
-
 </h1>
-
 
 <p style="
 margin-bottom:0;
 color:#d1d5db;
 ">
-
 Registration Successfully Received
-
 </p>
 
-
 </div>
-
 
 <div style="
 background:white;
@@ -1691,69 +1225,42 @@ padding:30px;
 border-radius:0 0 16px 16px;
 ">
 
-
-<h2>
-Registration Details
-</h2>
-
+<h2>Registration Details</h2>
 
 <p>
 <strong>Team Name:</strong>
-${escapeHtml(
-  data.teamName ||
-  "N/A"
-)}
+${escapeHtml(data.teamName || "N/A")}
 </p>
-
 
 <p>
 <strong>Team ID:</strong>
-${escapeHtml(
-  data.teamId
-)}
+${escapeHtml(data.teamId)}
 </p>
-
 
 <p>
 <strong>Application ID:</strong>
-${escapeHtml(
-  data.applicationId
-)}
+${escapeHtml(data.applicationId)}
 </p>
-
 
 <p>
 <strong>Status:</strong>
-
 <span style="
 color:#16a34a;
 font-weight:bold;
 ">
-
 SUBMITTED
-
 </span>
-
 </p>
-
 
 <p>
 <strong>Team Lead:</strong>
-${escapeHtml(
-  data.teamLead ||
-  "N/A"
-)}
+${escapeHtml(data.teamLead || "N/A")}
 </p>
-
 
 <p>
 <strong>Branch:</strong>
-${escapeHtml(
-  data.branch ||
-  "N/A"
-)}
+${escapeHtml(data.branch || "N/A")}
 </p>
-
 
 <div style="
 margin:25px 0;
@@ -1763,38 +1270,27 @@ border-radius:12px;
 text-align:center;
 ">
 
-
 <p style="
 margin-top:0;
 color:#6b7280;
 ">
-
 Your Application ID
-
 </p>
-
 
 <div style="
 font-size:24px;
 font-weight:bold;
 letter-spacing:1px;
 ">
-
-${escapeHtml(
-  data.applicationId
-)}
-
+${escapeHtml(data.applicationId)}
 </div>
 
-
 </div>
-
 
 <div style="
 text-align:center;
 margin:30px 0;
 ">
-
 
 <a
 href="${trackingLink}"
@@ -1807,33 +1303,25 @@ border-radius:8px;
 text-decoration:none;
 font-weight:bold;
 ">
-
 TRACK APPLICATION
-
 </a>
 
-
 </div>
-
 
 <p style="
 color:#6b7280;
 font-size:13px;
 line-height:1.6;
 ">
-
 Please keep your Application ID safe.
 You can use it to track your application.
-
 </p>
-
 
 <hr style="
 border:none;
 border-top:1px solid #e5e7eb;
 margin:25px 0;
 ">
-
 
 <p style="
 color:#6b7280;
@@ -1853,45 +1341,26 @@ NRI Institute of Technology
 
 </p>
 
-
 </div>
-
-
 </div>
-
 
 </body>
-
 </html>
-
 `;
 
-
   MailApp.sendEmail({
-
-    to:
-      data.email,
-
-    subject:
-      subject,
-
-    body:
-      plainText,
-
-    htmlBody:
-      htmlBody,
-
-    name:
-      "ASTRA Hackathon"
-
+    to: data.email,
+    subject: subject,
+    body: plainText,
+    htmlBody: htmlBody,
+    name: "ASTRA Hackathon"
   });
-
 }
 
 
-/************************************************************
- * DUPLICATE ALERT
- ************************************************************/
+/* =========================================================
+   DUPLICATE ALERT
+   ========================================================= */
 
 function sendDuplicateAlert(
   sheet,
@@ -1901,10 +1370,6 @@ function sendDuplicateAlert(
   headers
 ) {
 
-  /*
-   * Do not attempt to send an alert if the
-   * organizer email is still a placeholder.
-   */
   if (
     !CONFIG.ORGANIZER_EMAIL ||
     CONFIG.ORGANIZER_EMAIL.includes(
@@ -1913,13 +1378,11 @@ function sendDuplicateAlert(
   ) {
 
     console.log(
-      "Organizer email not configured."
+      "Organizer email is not configured."
     );
 
     return;
-
   }
-
 
   const rowValues =
     sheet
@@ -1931,26 +1394,19 @@ function sendDuplicateAlert(
       )
       .getDisplayValues()[0];
 
-
   const teamName =
     getField(
       headers,
       rowValues,
-      [
-        "Team Name"
-      ]
+      ["Team Name"]
     );
-
 
   const teamLead =
     getField(
       headers,
       rowValues,
-      [
-        "Team Lead Name"
-      ]
+      ["Team Lead Name"]
     );
-
 
   const email =
     getField(
@@ -1962,7 +1418,6 @@ function sendDuplicateAlert(
       ]
     );
 
-
   MailApp.sendEmail({
 
     to:
@@ -1972,7 +1427,6 @@ function sendDuplicateAlert(
       "ASTRA Registration | Duplicate Detected",
 
     body:
-
       "Duplicate ASTRA registration detected.\n\n" +
 
       "Team Name: " +
@@ -1998,47 +1452,30 @@ function sendDuplicateAlert(
       "Status: DUPLICATE"
 
   });
-
 }
 
 
-/************************************************************
- * APPLICATION TRACKING API
- *
- * GET:
- *
- * ?applicationId=ASTRA-2026-TEAM001
- *
- * ALSO ACCEPTS:
- *
- * ?id=ASTRA-2026-TEAM001
- ************************************************************/
+/* =========================================================
+   APPLICATION TRACKING API
+   ========================================================= */
 
 function doGet(e) {
 
   try {
 
-    /******************************************************
-     * READ QUERY PARAMETERS
-     ******************************************************/
-
     const params =
-      e &&
-      e.parameter
+      e && e.parameter
         ? e.parameter
         : {};
-
 
     const rawApplicationId =
       params.applicationId ||
       params.id ||
       "";
 
-
-    /******************************************************
-     * MISSING ID
-     ******************************************************/
-
+    /*
+     * Missing ID
+     */
     if (
       !String(
         rawApplicationId
@@ -2046,131 +1483,90 @@ function doGet(e) {
     ) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Application ID is required.",
-
         errorCode:
           "MISSING_ID"
-
       });
 
     }
 
 
-    /******************************************************
-     * NORMALIZE ID
-     ******************************************************/
-
+    /*
+     * Normalize
+     */
     const targetId =
       normalizeApplicationId(
         rawApplicationId
       );
 
 
-    /******************************************************
-     * VALIDATE ID FORMAT
-     *
-     * Example:
-     * ASTRA-2026-TEAM001
-     ******************************************************/
-
+    /*
+     * Validate
+     */
     if (
       !/^ASTRA-2026-TEAM\d{3,}$/
         .test(targetId)
     ) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Invalid Application ID format. Example: ASTRA-2026-TEAM001",
-
         errorCode:
           "INVALID_FORMAT"
-
       });
 
     }
 
 
-    /******************************************************
-     * OPEN BOUND SPREADSHEET
-     ******************************************************/
-
+    /*
+     * Open bound spreadsheet.
+     */
     const spreadsheet =
       SpreadsheetApp
         .getActiveSpreadsheet();
 
-
-    if (
-      !spreadsheet
-    ) {
+    if (!spreadsheet) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Registration database is unavailable.",
-
         errorCode:
           "NO_SPREADSHEET"
-
       });
 
     }
 
 
-    /******************************************************
-     * STRICTLY GET FORM RESPONSES 2
-     *
-     * NO FALLBACK TO ANOTHER SHEET.
-     ******************************************************/
-
+    /*
+     * STRICTLY Form Responses 2.
+     */
     const sheet =
       spreadsheet.getSheetByName(
         CONFIG.SHEET_NAME
       );
 
-
-    if (
-      !sheet
-    ) {
+    if (!sheet) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Form Responses 2 sheet was not found.",
-
         errorCode:
           "SHEET_NOT_FOUND"
-
       });
 
     }
 
 
-    /******************************************************
-     * GET SHEET SIZE
-     ******************************************************/
-
     const lastRow =
       sheet.getLastRow();
 
-
     const lastColumn =
       sheet.getLastColumn();
-
 
     if (
       lastRow < 2 ||
@@ -2178,32 +1574,18 @@ function doGet(e) {
     ) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Application not found.",
-
         errorCode:
           "NOT_FOUND"
-
       });
 
     }
 
 
-    /******************************************************
-     * GET HEADERS
-     ******************************************************/
-
     const headers =
       getHeaders(sheet);
-
-
-    /******************************************************
-     * FIND APPLICATION ID COLUMN
-     ******************************************************/
 
     const applicationColumn =
       findColumn(
@@ -2211,31 +1593,24 @@ function doGet(e) {
         CONFIG.APPLICATION_ID
       );
 
-
     if (
       applicationColumn === -1
     ) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Application tracking is not configured correctly.",
-
         errorCode:
           "APPLICATION_COLUMN_MISSING"
-
       });
 
     }
 
 
-    /******************************************************
-     * READ REGISTRATIONS
-     ******************************************************/
-
+    /*
+     * Read all registrations.
+     */
     const values =
       sheet
         .getRange(
@@ -2247,13 +1622,10 @@ function doGet(e) {
         .getDisplayValues();
 
 
-    /******************************************************
-     * FIND APPLICATION
-     ******************************************************/
-
-    let matchedRow =
-      null;
-
+    /*
+     * Find exact application.
+     */
+    let matchedRow = null;
 
     for (
       let i = 0;
@@ -2263,11 +1635,8 @@ function doGet(e) {
 
       const storedId =
         normalizeApplicationId(
-          values[i][
-            applicationColumn
-          ]
+          values[i][applicationColumn]
         );
-
 
       if (
         storedId === targetId
@@ -2277,40 +1646,27 @@ function doGet(e) {
           values[i];
 
         break;
-
       }
 
     }
 
 
-    /******************************************************
-     * APPLICATION NOT FOUND
-     ******************************************************/
-
-    if (
-      !matchedRow
-    ) {
+    if (!matchedRow) {
 
       return jsonResponse({
-
-        success:
-          false,
-
+        success: false,
         message:
           "Application not found. Please check your Application ID and try again.",
-
         errorCode:
           "NOT_FOUND"
-
       });
 
     }
 
 
-    /******************************************************
-     * BUILD PUBLIC APPLICATION RESPONSE
-     ******************************************************/
-
+    /*
+     * Build safe public response.
+     */
     const application =
       buildApplicationResponse(
         headers,
@@ -2319,43 +1675,25 @@ function doGet(e) {
       );
 
 
-    /******************************************************
-     * RETURN API RESPONSE
-     *
-     * Both:
-     *
-     * response.application
-     *
-     * response.data
-     *
-     * are supported.
-     ******************************************************/
-
     return jsonResponse({
 
-      success:
-        true,
+      success: true,
 
-      application:
-        application,
+      application: application,
 
-      data:
-        application
+      data: application
 
     });
 
+  }
 
-  } catch (error) {
+  catch (error) {
 
-    console.error(
-      error
-    );
-
+    console.error(error);
 
     return jsonResponse({
 
-      success:
-        false,
+      success: false,
 
       message:
         "Unable to process the application request.",
@@ -2366,20 +1704,12 @@ function doGet(e) {
     });
 
   }
-
 }
 
 
-/************************************************************
- * BUILD APPLICATION RESPONSE
- *
- * IMPORTANT:
- * Do NOT expose:
- *
- * ✗ Roll numbers
- * ✗ Individual member emails
- * ✗ Private sheet data
- ************************************************************/
+/* =========================================================
+   BUILD PUBLIC APPLICATION RESPONSE
+   ========================================================= */
 
 function buildApplicationResponse(
   headers,
@@ -2391,31 +1721,22 @@ function buildApplicationResponse(
     getField(
       headers,
       rowValues,
-      [
-        CONFIG.TEAM_ID
-      ]
+      [CONFIG.TEAM_ID]
     );
-
 
   const teamName =
     getField(
       headers,
       rowValues,
-      [
-        "Team Name"
-      ]
+      ["Team Name"]
     );
-
 
   const teamLead =
     getField(
       headers,
       rowValues,
-      [
-        "Team Lead Name"
-      ]
+      ["Team Lead Name"]
     );
-
 
   const email =
     getField(
@@ -2427,67 +1748,48 @@ function buildApplicationResponse(
       ]
     );
 
-
   const branch =
     getField(
       headers,
       rowValues,
-      [
-        "Team Lead Branch"
-      ]
+      ["Team Lead Branch"]
     );
-
 
   const problemStatement =
     getField(
       headers,
       rowValues,
-      [
-        "PROBLEM STATEMENT"
-      ]
+      ["PROBLEM STATEMENT"]
     );
-
 
   const domain =
     getField(
       headers,
       rowValues,
-      [
-        "Problem Statement Domain"
-      ]
+      ["Problem Statement Domain"]
     );
-
 
   const status =
     getField(
       headers,
       rowValues,
-      [
-        CONFIG.STATUS
-      ]
+      [CONFIG.STATUS]
     ) ||
     "SUBMITTED";
-
 
   const lastUpdated =
     getField(
       headers,
       rowValues,
-      [
-        CONFIG.LAST_UPDATED
-      ]
+      [CONFIG.LAST_UPDATED]
     );
-
 
   const reviewNotes =
     getField(
       headers,
       rowValues,
-      [
-        CONFIG.REVIEW_NOTES
-      ]
+      [CONFIG.REVIEW_NOTES]
     );
-
 
   const members =
     getTeamMembers(
@@ -2495,7 +1797,6 @@ function buildApplicationResponse(
       rowValues,
       teamLead
     );
-
 
   return {
 
@@ -2512,14 +1813,10 @@ function buildApplicationResponse(
       teamLead,
 
     email:
-      maskEmail(
-        email
-      ),
+      maskEmail(email),
 
     maskedEmail:
-      maskEmail(
-        email
-      ),
+      maskEmail(email),
 
     branch:
       branch,
@@ -2544,31 +1841,20 @@ function buildApplicationResponse(
     lastUpdated:
       lastUpdated,
 
+    /*
+     * If Review Notes are private internal notes,
+     * remove this field from the public API.
+     */
     reviewNotes:
       reviewNotes
 
   };
-
 }
 
 
-/************************************************************
- * GET TEAM MEMBERS
- *
- * Reads only:
- *
- * TEAM MEMBER 1(Full name)
- * TEAM MEMBER 2(Full name)
- * TEAM MEMBER 3(Full name)
- * TEAM MEMBER 4(Full name)
- * TEAM MEMBER 5(Full name)
- *
- * Does NOT read:
- *
- * Email ID
- * Roll Number
- * Branch
- ************************************************************/
+/* =========================================================
+   GET TEAM MEMBERS
+   ========================================================= */
 
 function getTeamMembers(
   headers,
@@ -2579,13 +1865,10 @@ function getTeamMembers(
   const members = [];
 
 
-  /******************************************************
-   * ADD TEAM LEAD FIRST
-   ******************************************************/
-
-  if (
-    teamLead
-  ) {
+  /*
+   * Team Lead first.
+   */
+  if (teamLead) {
 
     members.push({
 
@@ -2600,10 +1883,14 @@ function getTeamMembers(
   }
 
 
-  /******************************************************
-   * FIND TEAM MEMBER NAME COLUMNS
-   ******************************************************/
-
+  /*
+   * Find only:
+   *
+   * TEAM MEMBER X
+   * + FULL NAME
+   *
+   * Do not expose emails, rolls or branches.
+   */
   headers.forEach(
     function(header, index) {
 
@@ -2611,21 +1898,6 @@ function getTeamMembers(
         normalizeHeader(
           header
         );
-
-
-      /*
-       * We only accept headers containing:
-       *
-       * "team member"
-       *
-       * AND
-       *
-       * "full name"
-       *
-       * This prevents repeated "Email ID",
-       * "Roll Number", and "Branch" columns
-       * from being returned.
-       */
 
       const isTeamMemberName =
         normalized.includes(
@@ -2635,64 +1907,40 @@ function getTeamMembers(
           "full name"
         );
 
-
       if (
         !isTeamMemberName
       ) {
-
         return;
-
       }
-
 
       const name =
         String(
           rowValues[index] || ""
         ).trim();
 
-
-      if (
-        !name
-      ) {
-
+      if (!name) {
         return;
-
       }
 
-
       /*
-       * Do not add team lead twice.
+       * Avoid adding Team Lead twice.
        */
-
       if (
-        normalizeValue(
-          name
-        ) ===
-        normalizeValue(
-          teamLead
-        )
+        normalizeValue(name) ===
+        normalizeValue(teamLead)
       ) {
-
         return;
-
       }
-
-
-      /*
-       * Extract member number.
-       */
 
       const match =
         normalized.match(
           /team member\s*(\d+)/
         );
 
-
       const memberNumber =
         match
           ? match[1]
           : "";
-
 
       members.push({
 
@@ -2712,31 +1960,19 @@ function getTeamMembers(
 
 
   return members;
-
 }
 
 
-/************************************************************
- * MASK EMAIL
- *
- * Example:
- *
- * harsha@gmail.com
- *
- * becomes:
- *
- * h***a@gmail.com
- ************************************************************/
+/* =========================================================
+   MASK EMAIL
+   ========================================================= */
 
-function maskEmail(
-  email
-) {
+function maskEmail(email) {
 
   const value =
     String(
       email || ""
     ).trim();
-
 
   if (
     !value ||
@@ -2747,18 +1983,14 @@ function maskEmail(
 
   }
 
-
   const parts =
     value.split("@");
-
 
   const username =
     parts[0];
 
-
   const domain =
     parts[1];
-
 
   if (
     username.length <= 2
@@ -2772,82 +2004,61 @@ function maskEmail(
 
   }
 
-
   return (
-
     username.charAt(0) +
-
     "***" +
-
     username.charAt(
       username.length - 1
     ) +
-
     "@" +
-
     domain
-
   );
-
 }
 
 
-/************************************************************
- * JSON RESPONSE
- ************************************************************/
+/* =========================================================
+   JSON RESPONSE
+   ========================================================= */
 
-function jsonResponse(
-  object
-) {
+function jsonResponse(object) {
 
   return ContentService
     .createTextOutput(
-      JSON.stringify(
-        object
-      )
+      JSON.stringify(object)
     )
     .setMimeType(
       ContentService.MimeType.JSON
     );
-
 }
 
 
-/************************************************************
- * HTML ESCAPE
- ************************************************************/
+/* =========================================================
+   HTML ESCAPE
+   ========================================================= */
 
-function escapeHtml(
-  value
-) {
+function escapeHtml(value) {
 
   return String(
     value || ""
   )
-
     .replace(
       /&/g,
       "&amp;"
     )
-
     .replace(
       /</g,
       "&lt;"
     )
-
     .replace(
       />/g,
       "&gt;"
     )
-
     .replace(
       /"/g,
       "&quot;"
     )
-
     .replace(
       /'/g,
       "&#039;"
     );
-
 }

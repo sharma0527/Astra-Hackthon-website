@@ -51,9 +51,9 @@ export const TrackPage: React.FC<TrackPageProps> = ({
 
     // 2. Format validation (ASTRA-2026-TEAM001, ASTRA-2026-TEAM002, etc.)
     const normalizedId = trimmed.toUpperCase();
-    const formatRegex = /^ASTRA-2026-TEAM\d{3,}$/i;
+    const formatRegex = /^ASTRA-2026-TEAM\d{3,}$/;
     if (!formatRegex.test(normalizedId)) {
-      setErrorMessage('Please enter a valid Application ID, for example ASTRA-2026-TEAM001.');
+      setErrorMessage('Invalid Application ID. Example: ASTRA-2026-TEAM001');
       setResult(null);
       return;
     }
@@ -63,18 +63,12 @@ export const TrackPage: React.FC<TrackPageProps> = ({
     setResult(null);
 
     try {
-      const response = await trackApplication(normalizedId);
-      const appData = response.application || response.data;
-      if (response.success && appData) {
-        setResult(appData);
-        setErrorMessage(null);
-      } else {
-        const msg = response.error || response.message || 'Application not found. Please check your Application ID and try again.';
-        setErrorMessage(msg);
-        setResult(null);
-      }
-    } catch {
-      setErrorMessage('Unable to connect to the application tracking service. Please try again later.');
+      const app = await trackApplication(normalizedId);
+      setResult(app);
+      setErrorMessage(null);
+    } catch (err: any) {
+      const msg = err?.message || 'Application not found. Please check your Application ID and try again.';
+      setErrorMessage(msg);
       setResult(null);
     } finally {
       setIsLoading(false);

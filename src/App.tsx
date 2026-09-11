@@ -8,7 +8,44 @@ export function App() {
 
   useEffect(() => {
     document.title = "Astra hackthon 2026";
+
+    const syncRouteFromLocation = () => {
+      const path = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      if (path.includes('track') || search.includes('applicationid') || search.includes('id=')) {
+        setActiveTab('track');
+      } else {
+        setActiveTab('home');
+      }
+    };
+
+    syncRouteFromLocation();
+    window.addEventListener('popstate', syncRouteFromLocation);
+    return () => window.removeEventListener('popstate', syncRouteFromLocation);
   }, []);
+
+  const navigateToTrack = () => {
+    setActiveTab('track');
+    if (!window.location.pathname.toLowerCase().includes('track')) {
+      window.history.pushState(null, '', '/track-application');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateToHome = (hash?: string) => {
+    setActiveTab('home');
+    const targetUrl = hash ? `/#${hash}` : '/';
+    if (window.location.pathname.toLowerCase().includes('track')) {
+      window.history.pushState(null, '', targetUrl);
+    }
+    if (hash) {
+      setTimeout(() => {
+        document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Direct Google Form link
   const googleFormDirectUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdqfPCTyw2vOevRxs2qXPbPI_BBqMNuBNu7HrBryhSM_HftGA/viewform?usp=sf_link";
@@ -43,9 +80,9 @@ export function App() {
           <a
             className="flex items-center gap-3 group cursor-pointer"
             href="#hero"
-            onClick={() => {
-              setActiveTab('home');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+            onClick={(e) => {
+              e.preventDefault();
+              navigateToHome('hero');
             }}
           >
             <div className="relative p-1 rounded-xl bg-white/95 border border-[#00f2fe]/40 shadow-[0_0_15px_rgba(0,242,254,0.2)] flex items-center justify-center">
@@ -76,7 +113,10 @@ export function App() {
             <a
               className="hover:text-[#00f2fe] transition-colors flex items-center gap-1.5 py-1"
               href="#about"
-              onClick={() => setActiveTab('home')}
+              onClick={(e) => {
+                e.preventDefault();
+                navigateToHome('about');
+              }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]/60"></span>
               About
@@ -84,7 +124,10 @@ export function App() {
             <a
               className="hover:text-[#00f2fe] transition-colors flex items-center gap-1.5 py-1"
               href="#register"
-              onClick={() => setActiveTab('home')}
+              onClick={(e) => {
+                e.preventDefault();
+                navigateToHome('register');
+              }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]/60"></span>
               Register
@@ -92,19 +135,19 @@ export function App() {
             <a
               className="hover:text-[#00f2fe] transition-colors flex items-center gap-1.5 py-1"
               href="#contact"
-              onClick={() => setActiveTab('home')}
+              onClick={(e) => {
+                e.preventDefault();
+                navigateToHome('contact');
+              }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]/60"></span>
               Contact
             </a>
             <button
-              className={`hover:text-[#00f2fe] transition-colors flex items-center gap-1.5 py-1 ${
+              className={`hover:text-[#00f2fe] transition-colors flex items-center gap-1.5 py-1 cursor-pointer ${
                 activeTab === 'track' ? 'text-[#00f2fe] font-bold' : ''
               }`}
-              onClick={() => {
-                setActiveTab('track');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
+              onClick={navigateToTrack}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
               Track Application
@@ -115,7 +158,10 @@ export function App() {
             <a
               className="cyber-button-primary inline-flex items-center gap-2 px-4 py-2 rounded-full text-black font-extrabold text-xs sm:text-sm tracking-wider uppercase"
               href="#register"
-              onClick={() => setActiveTab('home')}
+              onClick={(e) => {
+                e.preventDefault();
+                navigateToHome('register');
+              }}
             >
               <span>Register Now</span>
               <span className="material-symbols-outlined text-[16px] font-bold">bolt</span>
@@ -128,16 +174,8 @@ export function App() {
       <main className="w-full pt-20 flex-1 relative z-10">
         {activeTab === 'track' ? (
           <TrackPage
-            onBackToHome={() => {
-              setActiveTab('home');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            onGoToRegister={() => {
-              setActiveTab('home');
-              setTimeout(() => {
-                document.getElementById('register')?.scrollIntoView({ behavior: 'smooth' });
-              }, 50);
-            }}
+            onBackToHome={() => navigateToHome()}
+            onGoToRegister={() => navigateToHome('register')}
           />
         ) : (
           <>

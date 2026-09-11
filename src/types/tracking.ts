@@ -5,48 +5,52 @@ export type ApplicationStatus =
   | 'CONFIRMED'
   | 'WAITLISTED'
   | 'REJECTED'
+  | 'DUPLICATE'
   | 'COMPLETED'
   | string;
 
 export interface TeamMember {
   name: string;
-  role?: string;
+  role: string;
 }
 
-export interface Application {
+export interface ApplicationData {
   applicationId: string;
   teamId: string;
   teamName: string;
   teamLead: string;
-  email?: string;
+  email: string;
   maskedEmail?: string;
-  college?: string;
-  branch?: string;
-  problemStatement?: string;
-  domain?: string;
-  track?: string;
+  branch: string;
+  problemStatement: string;
+  domain: string;
   members: TeamMember[];
-  memberCount?: number;
+  memberCount: number;
   status: ApplicationStatus;
-  lastUpdated?: string;
+  lastUpdated: string;
   reviewNotes?: string;
+  college?: string;
+  track?: string;
 }
 
-// Backward compatibility alias
-export type ApplicationRecord = Application;
+// Backward compatibility aliases
+export type Application = ApplicationData;
+export type ApplicationRecord = ApplicationData;
 
-export interface ApplicationResponse {
+export interface ApiResponse {
   success: boolean;
   message?: string;
-  application?: Application;
-  data?: Application;
   errorCode?: string;
+  application?: ApplicationData;
+  data?: ApplicationData;
 }
+
+export type ApplicationResponse = ApiResponse;
 
 export interface TrackingResult {
   success: boolean;
-  application?: Application;
-  data?: Application;
+  application?: ApplicationData;
+  data?: ApplicationData;
   message?: string;
   error?: string;
   errorCode?: string;
