@@ -62,16 +62,12 @@ To allow the ASTRA website to query application status securely:
    - **Who has access:** `Anyone` *(Critical: allows the frontend to fetch public sanitized status without login)*
 5. Click **Deploy**.
 6. Copy the generated **Web app URL**:
-   `https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec`
-
----
-
-## 5. Configure Frontend Environment Variable
-
-In `.env`:
-```env
-VITE_API_URL=https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec
-```
+   `https://script.google.com/macros/s/AKfycbwSYrFJKNLTxIvgHGD-d12ztyzm-__IMUt4VJ53ioTZo3YxOs2-UJs4GyRZbgqaMa7n/exec`
+7. Copy the generated Web app URL.
+8. Add it to your `.env` or Vercel Environment Variables:
+   ```bash
+   VITE_API_URL=https://script.google.com/macros/s/AKfycbwSYrFJKNLTxIvgHGD-d12ztyzm-__IMUt4VJ53ioTZo3YxOs2-UJs4GyRZbgqaMa7n/exec
+   ```
 
 Build the project:
 ```bash

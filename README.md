@@ -17,7 +17,7 @@ Welcome to the official web portal for **Astra Hackathon 2026**, organized by **
 ### 3. Live Google Apps Script Application Tracking
 - Real-time connection to Google Apps Script API endpoint:
   ```
-  https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec
+  https://script.google.com/macros/s/AKfycbwSYrFJKNLTxIvgHGD-d12ztyzm-__IMUt4VJ53ioTZo3YxOs2-UJs4GyRZbgqaMa7n/exec
   ```
 - Instant lookup by Application ID (e.g., `ASTRA-2026-TEAM001`).
 - Displays team information, lead name, member count, and multi-stage status progression:
@@ -85,7 +85,7 @@ npm run build
 4. **Environment Variables (Optional)**:
    The website is preconfigured with the live Google Apps Script endpoint as a built-in fallback. If you want to override or manage it from Vercel:
    - **Key**: `VITE_API_URL`
-   - **Value**: `https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec`
+   - **Value**: `https://script.google.com/macros/s/AKfycbwSYrFJKNLTxIvgHGD-d12ztyzm-__IMUt4VJ53ioTZo3YxOs2-UJs4GyRZbgqaMa7n/exec`
    - Enable for **Production**, **Preview**, and **Development**.
 5. Click **Deploy**.
 

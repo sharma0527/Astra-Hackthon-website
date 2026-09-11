@@ -39,7 +39,7 @@ export const AboutSection: React.FC = () => {
       className="relative py-20 px-4 sm:px-6 lg:px-8 z-10 overflow-hidden"
     >
       <div className="max-w-7xl mx-auto">
-        
+
         {/* Streamlined 3 Pillars Highlight matching user design */}
         <div className="max-w-4xl mx-auto mb-20">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-center">
@@ -76,7 +76,7 @@ export const AboutSection: React.FC = () => {
             </div>
 
             {/* Card 3 */}
-            <div className="cyber-glass-card hud-brackets p-6 rounded-2xl flex flex-col items-center group cursor-pointer hover:border-[#4facfe]/50">
+            <div className="cyber-glass-card hud-brackets p-6 rounded-2xl flex flex-col items-center group cursor-pointer hover:border-[#4facfe]/50 text-center">
               <div className="w-12 h-12 rounded-full bg-[#4facfe]/10 border border-[#4facfe]/30 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-[#4facfe]/20 transition-all duration-300">
                 <Users className="text-[#99deff] w-6 h-6" />
               </div>
@@ -84,10 +84,10 @@ export const AboutSection: React.FC = () => {
                 MTX
               </span>
               <span className="text-sm font-bold text-white tracking-wide group-hover:text-cyan-300 transition-colors">
-                Industry Mentorship
+                Industry Mentorship &amp; Participation Certificates
               </span>
               <span className="text-xs text-slate-400 mt-2 leading-relaxed">
-                Direct feedback, engineering jury &amp; network
+                Direct feedback, engineering jury, network &amp; participation certificates provided by MTX
               </span>
             </div>
           </div>
@@ -103,7 +103,7 @@ export const AboutSection: React.FC = () => {
         <div className="max-w-4xl mx-auto mb-16">
           <GlassCard glowColor="cyan" className="p-8 sm:p-10 text-center relative overflow-hidden">
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-            
+
             <p className="text-lg sm:text-2xl text-slate-200 font-sans font-medium leading-relaxed">
               &ldquo;{eventConfig.aboutText}&rdquo;
             </p>
@@ -136,11 +136,11 @@ export const AboutSection: React.FC = () => {
                     {hasAnimated ? stat.value : 0}
                     <span className="text-cyan-400">{stat.suffix}</span>
                   </div>
-                  
+
                   <div className="mt-3 text-sm font-bold font-mono tracking-wider text-slate-200 uppercase">
                     {stat.label}
                   </div>
-                  
+
                   <p className="mt-1 text-xs text-slate-400">
                     {stat.sublabel}
                   </p>

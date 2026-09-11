@@ -278,7 +278,7 @@ export function App() {
                   </div>
 
                   {/* Card 3 */}
-                  <div className="cyber-glass-card hud-brackets p-6 rounded-2xl flex flex-col items-center group cursor-pointer hover:border-[#4facfe]/50">
+                  <div className="cyber-glass-card hud-brackets p-6 rounded-2xl flex flex-col items-center group cursor-pointer hover:border-[#4facfe]/50 text-center">
                     <div className="w-12 h-12 rounded-full bg-[#4facfe]/10 border border-[#4facfe]/30 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-[#4facfe]/20 transition-all duration-300">
                       <span className="material-symbols-outlined text-[#99deff] text-2xl">groups</span>
                     </div>
@@ -286,10 +286,10 @@ export function App() {
                       MTX
                     </span>
                     <span className="text-sm font-bold text-white tracking-wide group-hover:text-primary transition-colors">
-                      Industry Mentorship
+                      Industry Mentorship &amp; Certificates
                     </span>
                     <span className="text-xs text-[#9cb1cc] mt-2 leading-relaxed">
-                      Direct feedback, engineering jury &amp; network
+                      Direct feedback, engineering jury, network &amp; participation certificates provided by MTX
                     </span>
                   </div>
                 </div>
