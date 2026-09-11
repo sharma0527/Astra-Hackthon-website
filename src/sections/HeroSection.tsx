@@ -77,7 +77,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
         {/* Subtitle */}
         <div className="mt-3 sm:mt-4 text-base sm:text-xl md:text-2xl font-bold font-mono tracking-[0.25em] text-[#00f2fe] uppercase drop-shadow-[0_0_12px_rgba(0,242,254,0.3)]">
-          A 12-HOUR NATIONAL HACKATHON
+          NATIONAL HACKATHON
         </div>
 
         {/* Supporting Line */}
@@ -89,7 +89,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
         {/* Main Description */}
         <p className="mt-4 text-sm sm:text-base text-slate-300 max-w-2xl font-sans font-normal leading-relaxed">
-          &ldquo;{eventConfig.mainDescription}&rdquo; Turn ambitious ideas into functional prototypes in a 12-hour high-octane engineering marathon hosted at NRI Institute of Technology.
+          &ldquo;{eventConfig.mainDescription}&rdquo; Turn ambitious ideas into functional prototypes in a high-octane national engineering marathon hosted at NRI Institute of Technology.
         </p>
 
         {/* Action Buttons */}

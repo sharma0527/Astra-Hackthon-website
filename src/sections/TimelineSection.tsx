@@ -14,7 +14,7 @@ export const TimelineSection: React.FC = () => {
         <SectionHeading
           badge="MISSION SCHEDULE"
           title="MISSION TRAJECTORY"
-          subtitle="Navigate the 12-hour sequence from initial registration to the grand valedictory ceremony."
+          subtitle="Navigate the sequence from initial registration to the grand valedictory ceremony."
         />
 
         {/* Selected Milestone Spotlight Banner */}

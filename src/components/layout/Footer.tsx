@@ -41,7 +41,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onNavigateSection 
               />
               <div>
                 <h3 className="text-xl font-bold font-display tracking-wider text-white">ASTRA HACKATHON 2026</h3>
-                <p className="text-xs text-cyan-400 font-mono">A 12-HOUR NATIONAL HACKATHON</p>
+                <p className="text-xs text-cyan-400 font-mono">NATIONAL HACKATHON</p>
               </div>
             </div>
 
@@ -85,7 +85,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onNavigateSection 
             </h4>
             <div className="flex items-start gap-2.5 text-xs text-slate-400">
               <Calendar className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>{eventConfig.dates} • 12 Hours Non-Stop</span>
+              <span>{eventConfig.dates} • National Hackathon</span>
             </div>
             <div className="flex items-start gap-2.5 text-xs text-slate-400">
               <MapPin className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />

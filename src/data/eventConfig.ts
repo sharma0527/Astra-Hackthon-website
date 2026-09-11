@@ -36,14 +36,14 @@ export interface FaqItem {
 export const eventConfig = {
   name: "ASTRA",
   year: 2026,
-  subtitle: "A 12-HOUR HACKATHON",
+  subtitle: "NATIONAL HACKATHON",
   supportingLine: "CODE • CREATE • COLLABORATE • CHANGE",
   mainDescription: "Where bold ideas become real-world innovation.",
-  aboutText: "ASTRA is a 12-hour hackathon where students come together to identify real-world challenges, build meaningful technology solutions, and transform ideas into measurable impact.",
+  aboutText: "ASTRA is a premier national hackathon where students come together to identify real-world challenges, build meaningful technology solutions, and transform ideas into measurable impact.",
   
   dates: "SEPTEMBER 21, 2026",
   eventDateISO: "2026-09-21T09:00:00+05:30",
-  duration: "12 Hours",
+  duration: "National Hackathon",
   venue: "NRI Institute of Technology",
   location: "Perecharla, Medikondoru Mandal, Guntur, AP",
   
@@ -250,7 +250,7 @@ export const eventConfig = {
     {
       id: "impact",
       title: "IMPACT",
-      description: "Create something meaningful that lives far beyond the 12-hour competition.",
+      description: "Create something meaningful that lives far beyond the hackathon competition.",
       iconName: "Rocket"
     }
   ],
@@ -285,7 +285,7 @@ export const eventConfig = {
       title: "Hackathon Begins",
       date: "September 21, 2026",
       time: "08:00 AM IST",
-      description: "Opening keynote, problem statement release, and 12-hour countdown kick-off.",
+      description: "Opening keynote, problem statement release, and hackathon countdown kick-off.",
       status: "upcoming"
     },
     {
@@ -409,7 +409,7 @@ export const eventConfig = {
       "Participants must carry an authentic college identity card during reporting."
     ],
     rules: [
-      "All code and prototypes must be freshly written during the 12-hour hackathon window.",
+      "All code and prototypes must be freshly written during the hackathon window.",
       "Open-source libraries, APIs, and boilerplate packages are permitted with proper attribution.",
       "Plagiarism or submission of pre-built commercial projects will lead to immediate disqualification.",
       "Every hacker is expected to abide by the official ASTRA Code of Conduct with respect and integrity."
@@ -420,7 +420,7 @@ export const eventConfig = {
     {
       category: "General",
       question: "What is ASTRA?",
-      answer: "ASTRA is a premier 12-hour hackathon organized collaboratively by NRI Institute of Technology, MTX, and NRIIT Coding Club. It is designed to empower student engineers to build high-impact tech prototypes in a high-octane cosmic environment."
+      answer: "ASTRA is a premier national hackathon organized collaboratively by NRI Institute of Technology, MTX, and NRIIT Coding Club. It is designed to empower student engineers to build high-impact tech prototypes in a high-octane cosmic environment."
     },
     {
       category: "Registration",
@@ -444,7 +444,7 @@ export const eventConfig = {
     },
     {
       category: "Mentorship",
-      question: "Will mentors be available during the 12 hours?",
+      question: "Will mentors be available during the hackathon?",
       answer: "Yes, experienced software architects and engineers from MTX and faculty leads will conduct scheduled mentorship checkpoints, provide debugging support, and offer architectural guidance."
     }
   ] as FaqItem[]

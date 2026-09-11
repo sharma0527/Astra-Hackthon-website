@@ -197,24 +197,20 @@ export function App() {
 
                 {/* High-energy Subtitles */}
                 <p className="text-base sm:text-xl font-bold tracking-[0.25em] text-[#00f2fe] uppercase mb-3 drop-shadow-[0_0_12px_rgba(0,242,254,0.3)] font-mono">
-                  A 12-HOUR NATIONAL HACKATHON
+                  NATIONAL HACKATHON
                 </p>
                 <p className="text-[#d1bcff] italic text-base sm:text-lg mb-6 font-medium tracking-wide">
                   “Code • Create • Collaborate • Change”
                 </p>
                 <p className="text-[#9cb1cc] max-w-2xl text-sm sm:text-base leading-relaxed mb-10 font-normal">
-                  Turn ambitious ideas into functional prototypes in a 12-hour high-octane engineering marathon hosted at NRI Institute of Technology.
+                  Turn ambitious ideas into functional prototypes in a high-octane national engineering marathon hosted at NRI Institute of Technology.
                 </p>
 
                 {/* Cyber HUD Quick Fact Badges with hover lift */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 w-full max-w-2xl mb-10 text-xs sm:text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-xl mb-10 text-xs sm:text-sm">
                   <div className="cyber-glass-card hud-brackets flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl cursor-default transition-all duration-300 hover:scale-105">
                     <span className="material-symbols-outlined text-[#00f2fe] text-xl drop-shadow-[0_0_8px_#00f2fe]">calendar_month</span>
                     <span className="font-bold text-white tracking-wide">21-09-2026</span>
-                  </div>
-                  <div className="cyber-glass-card hud-brackets flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl cursor-default transition-all duration-300 hover:scale-105">
-                    <span className="material-symbols-outlined text-[#7928ca] text-xl drop-shadow-[0_0_8px_#b827fc]">timelapse</span>
-                    <span className="font-bold text-white tracking-wide">12 Hours Non-Stop</span>
                   </div>
                   <div className="cyber-glass-card hud-brackets flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl cursor-default transition-all duration-300 hover:scale-105">
                     <span className="material-symbols-outlined text-[#d1bcff] text-xl drop-shadow-[0_0_8px_#d1bcff]">location_on</span>
