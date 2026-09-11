@@ -48,8 +48,8 @@ export const AboutSection: React.FC = () => {
               <div className="w-12 h-12 rounded-full bg-[#00f2fe]/10 border border-[#00f2fe]/30 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-[#00f2fe]/20 transition-all duration-300">
                 <Bolt className="text-[#00f2fe] w-6 h-6" />
               </div>
-              <span className="text-3xl sm:text-4xl font-extrabold text-[#00f2fe] mb-1 tracking-tight drop-shadow-[0_0_15px_rgba(0,242,254,0.4)] font-mono">
-                24H
+              <span className="text-2xl sm:text-3xl font-extrabold text-[#00f2fe] mb-1 tracking-tight drop-shadow-[0_0_15px_rgba(0,242,254,0.4)] font-mono">
+                NON-STOP
               </span>
               <span className="text-sm font-bold text-white tracking-wide group-hover:text-cyan-300 transition-colors">
                 Continuous Sprint
