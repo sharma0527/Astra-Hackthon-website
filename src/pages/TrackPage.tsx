@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import PixelSnow from '../components/ui/PixelSnow';
-import { trackApplication } from '../services/applicationApi';
+import { trackApplication, validateApplicationId } from '../services/applicationApi';
 import type { Application, ApplicationStatus } from '../types/tracking';
 import {
   Search,
@@ -22,7 +22,10 @@ import {
   FileText,
   Hash,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Phone,
+  MessageCircle,
+  X
 } from 'lucide-react';
 
 interface TrackPageProps {
@@ -38,37 +41,40 @@ export const TrackPage: React.FC<TrackPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<Application | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLimitReached, setIsLimitReached] = useState(false);
 
   const executeSearch = async (rawInput: string) => {
-    const trimmed = rawInput.trim();
+    const trimmed = (rawInput || '').trim();
 
-    // 1. Empty input validation
-    if (!trimmed) {
-      setErrorMessage('Please enter your Application ID.');
+    // 1. Validation using unified validator supporting UUID & legacy formats
+    const validation = validateApplicationId(trimmed);
+    if (!validation.isValid) {
+      setErrorMessage(validation.error || 'Please enter your Application ID.');
+      setIsLimitReached(false);
       setResult(null);
       return;
     }
 
-    // 2. Format validation (ASTRA-2026-TEAM001, ASTRA-2026-TEAM002, etc.)
-    const normalizedId = trimmed.toUpperCase();
-    const formatRegex = /^ASTRA-2026-TEAM\d{3,}$/;
-    if (!formatRegex.test(normalizedId)) {
-      setErrorMessage('Invalid Application ID. Example: ASTRA-2026-TEAM001');
-      setResult(null);
-      return;
-    }
-
+    const normalizedId = validation.normalizedId;
     setIsLoading(true);
     setErrorMessage(null);
+    setIsLimitReached(false);
     setResult(null);
 
     try {
       const app = await trackApplication(normalizedId);
       setResult(app);
       setErrorMessage(null);
+      setIsLimitReached(false);
     } catch (err: any) {
-      const msg = err?.message || 'Application not found. Please check your Application ID and try again.';
-      setErrorMessage(msg);
+      const rawMsg = err?.message || 'Application not found. Please check your Application ID and try again.';
+      if (rawMsg.startsWith('LIMIT_REACHED:')) {
+        setIsLimitReached(true);
+        setErrorMessage(rawMsg.replace('LIMIT_REACHED:', ''));
+      } else {
+        setIsLimitReached(false);
+        setErrorMessage(rawMsg);
+      }
       setResult(null);
     } finally {
       setIsLoading(false);
@@ -269,9 +275,19 @@ export const TrackPage: React.FC<TrackPageProps> = ({
                 type="text"
                 value={searchId}
                 onChange={(e) => setSearchId(e.target.value.toUpperCase())}
-                placeholder="ASTRA-2026-TEAM001"
-                className="w-full pl-12 pr-4 py-3.5 bg-space-950 rounded-xl border border-cyan-500/30 text-white font-mono text-sm sm:text-base tracking-widest uppercase focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 shadow-inner"
+                placeholder="Enter Application ID (e.g. ASTRA-2026-...)"
+                className="w-full pl-12 pr-10 py-3.5 bg-space-950 rounded-xl border border-cyan-500/30 text-white font-mono text-sm sm:text-base tracking-wider uppercase focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 shadow-inner"
               />
+              {searchId && (
+                <button
+                  type="button"
+                  onClick={() => setSearchId('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                  title="Clear input"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             <button
@@ -308,9 +324,67 @@ export const TrackPage: React.FC<TrackPageProps> = ({
           </GlassCard>
         )}
 
-        {/* Error State */}
-        {errorMessage && !isLoading && (
-          <GlassCard glowColor="none" className="p-8 text-center border-rose-500/30 bg-rose-950/10 mb-8">
+        {/* Error State: Limit Reached */}
+        {errorMessage && isLimitReached && !isLoading && (
+          <GlassCard glowColor="none" className="p-8 text-center border-amber-500/40 bg-amber-950/20 mb-8 animate-fadeIn">
+            <AlertCircle className="w-12 h-12 text-amber-400 mx-auto mb-3" />
+            <h3 className="text-lg sm:text-xl font-bold font-display text-white mb-2">
+              TRACKING LIMIT REACHED
+            </h3>
+            <p className="text-sm text-amber-200 max-w-lg mx-auto mb-6 font-mono leading-relaxed">
+              {errorMessage}
+            </p>
+
+            <div className="max-w-md mx-auto p-4 rounded-xl bg-space-950/80 border border-amber-500/30 mb-6 text-left">
+              <div className="text-xs font-mono text-amber-300 uppercase font-bold tracking-wider mb-2 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" />
+                <span>FOR ASSISTANCE CONTACT ORGANIZERS</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                <a
+                  href="tel:9701711338"
+                  className="p-2 rounded bg-space-900 border border-slate-700 text-xs font-mono text-cyan-300 hover:border-cyan-400 hover:text-white transition-colors"
+                >
+                  9701711338
+                </a>
+                <a
+                  href="tel:9392757990"
+                  className="p-2 rounded bg-space-900 border border-slate-700 text-xs font-mono text-cyan-300 hover:border-cyan-400 hover:text-white transition-colors"
+                >
+                  9392757990
+                </a>
+                <a
+                  href="tel:8688011599"
+                  className="p-2 rounded bg-space-900 border border-slate-700 text-xs font-mono text-cyan-300 hover:border-cyan-400 hover:text-white transition-colors"
+                >
+                  8688011599
+                </a>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <a
+                href="https://chat.whatsapp.com/IUboDrvxO5M0k69IPHd41U"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors inline-flex items-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>JOIN OFFICIAL WHATSAPP GROUP</span>
+              </a>
+              <button
+                onClick={onBackToHome}
+                className="px-5 py-2.5 rounded-xl text-xs font-mono text-slate-300 hover:text-white bg-space-950 border border-slate-700 hover:border-cyan-500/40 transition-colors cursor-pointer"
+              >
+                Back to Home
+              </button>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* Error State: Normal Error */}
+        {errorMessage && !isLimitReached && !isLoading && (
+          <GlassCard glowColor="none" className="p-8 text-center border-rose-500/30 bg-rose-950/10 mb-8 animate-fadeIn">
             <AlertCircle className="w-12 h-12 text-rose-400 mx-auto mb-3" />
             <h3 className="text-lg font-bold font-display text-white mb-2">
               APPLICATION STATUS ADVISORY
@@ -336,9 +410,14 @@ export const TrackPage: React.FC<TrackPageProps> = ({
             <GlassCard glowColor="cyan" className="p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 tracking-wider mb-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-cyan-400 tracking-wider mb-1">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400" />
                     <span>APPLICATION FOUND</span>
+                    {result.limit !== undefined && (
+                      <span className="ml-2 px-2.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 text-[10px] tracking-wide">
+                        Tracking: {result.usage ?? 1} / {result.limit} (Remaining: {result.remaining ?? 0})
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black font-mono tracking-wider text-white">
                     {result.applicationId}

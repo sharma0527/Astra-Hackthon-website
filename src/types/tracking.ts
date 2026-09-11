@@ -31,6 +31,9 @@ export interface ApplicationData {
   reviewNotes?: string;
   college?: string;
   track?: string;
+  usage?: number | string;
+  limit?: number | string;
+  remaining?: number | string;
 }
 
 // Backward compatibility aliases
@@ -41,8 +44,12 @@ export interface ApiResponse {
   success: boolean;
   message?: string;
   errorCode?: string;
+  limitReached?: boolean;
   application?: ApplicationData;
   data?: ApplicationData;
+  usage?: number | string;
+  limit?: number | string;
+  remaining?: number | string;
 }
 
 export type ApplicationResponse = ApiResponse;
