@@ -35,7 +35,7 @@ const CONFIG = {
   YEAR: "2026",
 
   API_URL:
-    "https://script.google.com/macros/s/AKfycbwSYrFJKNLTxIvgHGD-d12ztyzm-__IMUt4VJ53ioTZo3YxOs2-UJs4GyRZbgqaMa7n/exec",
+    "https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec",
 
   TRACKING_URL:
     "https://astra-hackthon-website.vercel.app/track-application",

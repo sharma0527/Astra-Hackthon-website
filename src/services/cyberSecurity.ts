@@ -4,7 +4,7 @@
  */
 
 export const GOOGLE_APPS_SCRIPT_URL = 
-  "https://script.google.com/macros/s/AKfycbwSYrFJKNLTxIvgHGD-d12ztyzm-__IMUt4VJ53ioTZo3YxOs2-UJs4GyRZbgqaMa7n/exec";
+  "https://script.google.com/macros/s/AKfycbxEaTgkR0JXt7HW6R-BOlovljWKC4WviDHBv5VzArmpMmfrrUsfc_U6xupv8Viv7M9LWA/exec";
 
 export function getSecureEndpoint(): string {
   const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL;
