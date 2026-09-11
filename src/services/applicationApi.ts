@@ -1,12 +1,19 @@
-import { getSecureEndpoint, sanitizeCyberInput, maskSensitiveEmail } from './cyberSecurity';
-import type { Application, TrackingResult, ApplicationStatus } from '../types/tracking';
+import { getSecureEndpoint, maskSensitiveEmail } from './cyberSecurity';
+import type { Application, TrackingResult, ApplicationResponse, TeamMember, ApplicationStatus } from '../types/tracking';
+
+/**
+ * Normalizes Application ID input
+ */
+export function normalizeApplicationId(rawId: string): string {
+  return (rawId || '').trim().toUpperCase();
+}
 
 /**
  * Validate Application ID format:
- * Accepts ASTRA-2026-TEAM001, ASTRA-2026-TEAM002, or any ASTRA-2026-[A-Z0-9_-]+
+ * Accepts ASTRA-2026-TEAM001, ASTRA-2026-TEAM002, etc. (at least 3 digits)
  */
 export function validateApplicationId(rawId: string): { isValid: boolean; error?: string } {
-  const trimmed = rawId.trim();
+  const trimmed = (rawId || '').trim();
   if (!trimmed) {
     return {
       isValid: false,
@@ -14,9 +21,9 @@ export function validateApplicationId(rawId: string): { isValid: boolean; error?
     };
   }
 
-  // Format validation: ASTRA-2026-TEAM001, ASTRA-2026-XXXX, etc.
-  const regex = /^ASTRA(-2026)?-[A-Z0-9_-]{3,30}$/i;
-  if (!regex.test(trimmed)) {
+  const normalized = trimmed.toUpperCase();
+  const regex = /^ASTRA-2026-TEAM\d{3,}$/;
+  if (!regex.test(normalized)) {
     return {
       isValid: false,
       error: 'Please enter a valid Application ID, for example ASTRA-2026-TEAM001.'
@@ -28,104 +35,140 @@ export function validateApplicationId(rawId: string): { isValid: boolean; error?
 
 /**
  * Query live Google Apps Script Web App API
+ * No mock data. Supports response.application and response.data.
  */
 export async function trackApplication(rawApplicationId: string): Promise<TrackingResult> {
-  const validation = validateApplicationId(rawApplicationId);
-  if (!validation.isValid) {
+  const trimmed = (rawApplicationId || '').trim();
+  if (!trimmed) {
     return {
       success: false,
-      errorCode: !rawApplicationId.trim() ? 'EMPTY_INPUT' : 'INVALID_FORMAT',
-      error: validation.error
+      errorCode: 'MISSING_ID',
+      error: 'Please enter your Application ID.',
+      message: 'Please enter your Application ID.'
     };
   }
 
-  const applicationId = sanitizeCyberInput(rawApplicationId);
-  const endpointUrl = getSecureEndpoint();
+  const normalizedId = trimmed.toUpperCase();
+  const validation = validateApplicationId(normalizedId);
+  if (!validation.isValid) {
+    return {
+      success: false,
+      errorCode: 'INVALID_FORMAT',
+      error: validation.error,
+      message: validation.error
+    };
+  }
+
+  const apiUrl = getSecureEndpoint();
 
   try {
-    const queryUrl = `${endpointUrl}?applicationId=${encodeURIComponent(applicationId)}`;
+    const queryUrl = `${apiUrl}?applicationId=${encodeURIComponent(normalizedId)}`;
     const response = await fetch(queryUrl, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json, text/plain, */*'
+        'Accept': 'application/json'
       }
     });
 
     if (!response.ok) {
       return {
         success: false,
-        errorCode: 'NETWORK_ERROR',
-        error: 'Unable to connect to the application tracking service. Please try again later.'
+        errorCode: 'SERVER_ERROR',
+        error: 'Unable to connect to the application tracking service. Please try again later.',
+        message: 'Unable to connect to the application tracking service. Please try again later.'
       };
     }
 
-    const responseText = await response.text();
+    const result: ApplicationResponse = await response.json();
 
-    try {
-      const result = JSON.parse(responseText);
+    // Support both response.application and response.data
+    const rawApp = result.application || result.data;
 
-      // Handle Format 1: { success: true, application: { ... } }
-      // or Format 2: { success: true, data: { ... } }
-      const rawApp = result.application || result.data;
+    if (result.success && rawApp) {
+      const rawMembers = rawApp.members;
+      const normalizedMembers: TeamMember[] = Array.isArray(rawMembers)
+        ? rawMembers.map((m: any) => {
+            if (typeof m === 'string') {
+              return { name: m, role: 'Team Member' };
+            }
+            return {
+              name: m?.name || String(m || ''),
+              role: m?.role || 'Team Member'
+            };
+          })
+        : [];
 
-      if (result.success && rawApp) {
-        // Parse members whether array of objects { name: string } or strings
-        const rawMembers = rawApp.members;
-        const normalizedMembers: Array<{ name: string } | string> = Array.isArray(rawMembers)
-          ? rawMembers
-          : [];
+      const app: Application = {
+        applicationId: rawApp.applicationId || normalizedId,
+        teamId: rawApp.teamId || '',
+        teamName: rawApp.teamName || '',
+        teamLead: rawApp.teamLead || '',
+        email: rawApp.maskedEmail || maskSensitiveEmail(rawApp.email || ''),
+        maskedEmail: rawApp.maskedEmail || maskSensitiveEmail(rawApp.email || ''),
+        branch: rawApp.branch || '',
+        problemStatement: rawApp.problemStatement || '',
+        domain: rawApp.domain || '',
+        track: rawApp.domain || rawApp.problemStatement || rawApp.track || '',
+        college: rawApp.college,
+        members: normalizedMembers,
+        memberCount: rawApp.memberCount || normalizedMembers.length,
+        status: (rawApp.status ? String(rawApp.status).toUpperCase() : 'SUBMITTED') as ApplicationStatus,
+        lastUpdated: rawApp.lastUpdated,
+        reviewNotes: rawApp.reviewNotes
+      };
 
-        const app: Application = {
-          applicationId: rawApp.applicationId || applicationId,
-          teamId: rawApp.teamId || rawApp.teamName || 'ASTRA-TEAM',
-          teamName: rawApp.teamName || 'ASTRA Team',
-          teamLead: rawApp.teamLead || rawApp.name || 'Team Leader',
-          email: maskSensitiveEmail(rawApp.email || ''),
-          college: rawApp.college || 'NRI Institute of Technology',
-          branch: rawApp.branch || 'CSE',
-          track: rawApp.track || 'General Innovation',
-          members: normalizedMembers,
-          memberCount: rawApp.memberCount || (Array.isArray(normalizedMembers) ? normalizedMembers.length : 4),
-          status: (rawApp.status?.toUpperCase() as ApplicationStatus) || 'SUBMITTED',
-          lastUpdated: rawApp.lastUpdated || new Date().toISOString(),
-          reviewNotes: rawApp.reviewNotes
-        };
+      return {
+        success: true,
+        application: app,
+        data: app
+      };
+    }
 
+    if (result.success === false) {
+      if (result.errorCode === 'INVALID_FORMAT') {
         return {
-          success: true,
-          application: app,
-          data: app
+          success: false,
+          errorCode: 'INVALID_FORMAT',
+          error: 'Please enter a valid Application ID, for example ASTRA-2026-TEAM001.',
+          message: 'Please enter a valid Application ID, for example ASTRA-2026-TEAM001.'
         };
       }
-
-      // If API returned { success: false, message: "..." }
-      if (result.success === false) {
-        const errorMsg = result.message || result.error || 'Application not found. Please check your Application ID and try again.';
+      if (result.errorCode === 'NOT_FOUND') {
         return {
           success: false,
           errorCode: 'NOT_FOUND',
-          error: errorMsg,
-          message: errorMsg
+          error: 'Application not found. Please check your Application ID and try again.',
+          message: 'Application not found. Please check your Application ID and try again.'
         };
       }
-    } catch {
+      if (result.errorCode === 'SHEET_NOT_FOUND' || result.errorCode === 'NO_SPREADSHEET' || result.errorCode === 'APPLICATION_COLUMN_MISSING' || result.errorCode === 'SERVER_ERROR') {
+        return {
+          success: false,
+          errorCode: 'SERVER_ERROR',
+          error: 'Unable to connect to the application tracking service. Please try again later.',
+          message: 'Unable to connect to the application tracking service. Please try again later.'
+        };
+      }
       return {
         success: false,
-        errorCode: 'NETWORK_ERROR',
-        error: 'Unable to connect to the application tracking service. Please try again later.'
+        errorCode: result.errorCode || 'NOT_FOUND',
+        error: result.message || 'Application not found. Please check your Application ID and try again.',
+        message: result.message || 'Application not found. Please check your Application ID and try again.'
       };
     }
+
+    return {
+      success: false,
+      errorCode: 'NOT_FOUND',
+      error: 'Application not found. Please check your Application ID and try again.',
+      message: 'Application not found. Please check your Application ID and try again.'
+    };
   } catch {
     return {
       success: false,
-      errorCode: 'NETWORK_ERROR',
-      error: 'Unable to connect to the application tracking service. Please try again later.'
+      errorCode: 'SERVER_ERROR',
+      error: 'Unable to connect to the application tracking service. Please try again later.',
+      message: 'Unable to connect to the application tracking service. Please try again later.'
     };
   }
-
-  return {
-    success: false,
-    errorCode: 'NOT_FOUND',
-    error: 'Application not found. Please check your Application ID and try again.'
-  };
 }

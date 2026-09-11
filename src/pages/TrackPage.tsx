@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import PixelSnow from '../components/ui/PixelSnow';
 import { trackApplication } from '../services/applicationApi';
@@ -18,28 +18,12 @@ import {
   Clock3,
   School,
   GitBranch,
-  Target
+  Target,
+  FileText,
+  Hash,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
-
-// Rate-limiting helper: max 2 tracking checks per Application ID
-const getTrackingAttempts = (id: string): number => {
-  try {
-    const val = localStorage.getItem(`astra_query_count_${id}`);
-    return val ? parseInt(val, 10) : 0;
-  } catch {
-    return 0;
-  }
-};
-
-const incrementTrackingAttempt = (id: string): number => {
-  try {
-    const next = getTrackingAttempts(id) + 1;
-    localStorage.setItem(`astra_query_count_${id}`, next.toString());
-    return next;
-  } catch {
-    return 1;
-  }
-};
 
 interface TrackPageProps {
   onBackToHome: () => void;
@@ -54,33 +38,23 @@ export const TrackPage: React.FC<TrackPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<Application | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [queryCount, setQueryCount] = useState<number | null>(null);
 
-  const handleSearch = async () => {
-    const rawInput = searchId.trim();
+  const executeSearch = async (rawInput: string) => {
+    const trimmed = rawInput.trim();
 
     // 1. Empty input validation
-    if (!rawInput) {
+    if (!trimmed) {
       setErrorMessage('Please enter your Application ID.');
       setResult(null);
       return;
     }
 
-    // 2. Format validation (accept ASTRA-2026-TEAM001, ASTRA-2026-XXXX, etc.)
-    const normalizedId = rawInput.toUpperCase();
-    const formatRegex = /^ASTRA(-2026)?-[A-Z0-9_-]+$/i;
+    // 2. Format validation (ASTRA-2026-TEAM001, ASTRA-2026-TEAM002, etc.)
+    const normalizedId = trimmed.toUpperCase();
+    const formatRegex = /^ASTRA-2026-TEAM\d{3,}$/i;
     if (!formatRegex.test(normalizedId)) {
       setErrorMessage('Please enter a valid Application ID, for example ASTRA-2026-TEAM001.');
       setResult(null);
-      return;
-    }
-
-    // 3. Security rate limit: 1 Application ID can only be checked 2 times
-    const existingCount = getTrackingAttempts(normalizedId);
-    if (existingCount >= 2) {
-      setErrorMessage(`Security Rate Limit Reached: Application ID "${normalizedId}" has already reached the maximum limit of 2 tracking queries. Per security policy, each ID can be verified a maximum of 2 times. If you require further status verification, please contact the organizing team.`);
-      setResult(null);
-      setQueryCount(existingCount);
       return;
     }
 
@@ -90,13 +64,12 @@ export const TrackPage: React.FC<TrackPageProps> = ({
 
     try {
       const response = await trackApplication(normalizedId);
-      if (response.success && (response.application || response.data)) {
-        const nextCount = incrementTrackingAttempt(normalizedId);
-        setQueryCount(nextCount);
-        setResult(response.application || response.data || null);
+      const appData = response.application || response.data;
+      if (response.success && appData) {
+        setResult(appData);
         setErrorMessage(null);
       } else {
-        const msg = response.message || response.error || 'Application not found. Please check your Application ID and try again.';
+        const msg = response.error || response.message || 'Application not found. Please check your Application ID and try again.';
         setErrorMessage(msg);
         setResult(null);
       }
@@ -106,6 +79,26 @@ export const TrackPage: React.FC<TrackPageProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Support direct tracking if applicationId or id is in query params
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const idParam = urlParams.get('applicationId') || urlParams.get('id');
+      if (idParam) {
+        const cleanId = idParam.trim().toUpperCase();
+        setSearchId(cleanId);
+        executeSearch(cleanId);
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }, []);
+
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    executeSearch(searchId);
   };
 
   // Pipeline stages
@@ -121,7 +114,7 @@ export const TrackPage: React.FC<TrackPageProps> = ({
     stepIndex: number,
     currentStatus: ApplicationStatus
   ): 'completed' | 'active' | 'pending' | 'special' => {
-    const statusUpper = currentStatus.toUpperCase();
+    const statusUpper = (currentStatus || '').toUpperCase();
 
     if (statusUpper === 'REJECTED' || statusUpper === 'WAITLISTED') {
       if (stepIndex === 0) return 'completed';
@@ -159,7 +152,7 @@ export const TrackPage: React.FC<TrackPageProps> = ({
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
-    const s = status.toUpperCase();
+    const s = (status || '').toUpperCase();
     switch (s) {
       case 'CONFIRMED':
       case 'COMPLETED':
@@ -198,25 +191,24 @@ export const TrackPage: React.FC<TrackPageProps> = ({
             NOT SELECTED
           </span>
         );
+      case 'DUPLICATE':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-rose-950 text-rose-300 border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
+            <XCircle className="w-3.5 h-3.5" />
+            DUPLICATE
+          </span>
+        );
       default:
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40">
-            {s}
+            {s || 'SUBMITTED'}
           </span>
         );
     }
   };
 
-  // Helper to extract member name string safely
-  const getMemberName = (m: { name: string } | string): string => {
-    if (typeof m === 'string') return m;
-    if (m && typeof m === 'object' && 'name' in m) return m.name;
-    return String(m || 'Member');
-  };
-
   return (
     <div className="relative min-h-screen pt-28 pb-20 px-4 sm:px-6 lg:px-8 z-10">
-      
       {/* Full-screen Interactive WebGL Pixel Snow Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <PixelSnow
@@ -240,7 +232,6 @@ export const TrackPage: React.FC<TrackPageProps> = ({
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-600/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-4xl mx-auto relative z-10">
-        
         {/* Navigation back */}
         <div className="mb-8 flex items-center justify-between">
           <button
@@ -273,10 +264,7 @@ export const TrackPage: React.FC<TrackPageProps> = ({
         {/* Search Input Box */}
         <GlassCard glowColor="cyan" className="p-6 sm:p-8 mb-8">
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSearch();
-            }}
+            onSubmit={handleSearch}
             className="flex flex-col sm:flex-row gap-3"
           >
             <div className="relative flex-1">
@@ -295,38 +283,21 @@ export const TrackPage: React.FC<TrackPageProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="px-6 py-3.5 rounded-xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider text-black bg-gradient-to-r from-cyan-400 to-purple-400 hover:from-cyan-300 hover:to-purple-300 shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all duration-300 flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
+              className="px-6 py-3.5 rounded-xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider text-black bg-gradient-to-r from-cyan-400 to-purple-400 hover:from-cyan-300 hover:to-purple-300 shadow-[0_0_20px_rgba(0,240,255,0.4)] transition-all duration-300 flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <RefreshCw className="w-4 h-4 animate-spin text-black" />
               ) : (
                 <Search className="w-4 h-4 text-black" />
               )}
-              <span>{isLoading ? 'SEARCHING...' : 'TRACK APPLICATION'}</span>
+              <span>{isLoading ? 'Checking application...' : 'TRACK APPLICATION'}</span>
             </button>
           </form>
-
-          {/* Rate-Limit Policy Status Bar */}
-          <div className="mt-4 pt-3.5 border-t border-cyan-500/15 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-mono text-slate-400">
-            <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Policy: Maximum 2 tracking verifications allowed per Application ID</span>
-            </div>
-            {queryCount !== null && (
-              <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                queryCount >= 2
-                  ? 'bg-rose-950 text-rose-300 border border-rose-500/40'
-                  : 'bg-cyan-950 text-cyan-300 border border-cyan-500/40'
-              }`}>
-                {queryCount} / 2 checks used {queryCount >= 2 ? '(Limit reached)' : '(1 remaining)'}
-              </span>
-            )}
-          </div>
         </GlassCard>
 
         {/* Loading State */}
         {isLoading && (
-          <GlassCard glowColor="cyan" className="p-12 text-center animate-fadeIn">
+          <GlassCard glowColor="cyan" className="p-12 text-center animate-fadeIn mb-8">
             <div className="relative w-20 h-20 mx-auto mb-6">
               <div className="absolute inset-0 border-2 border-cyan-400/30 rounded-full animate-ping" />
               <div className="w-full h-full border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
@@ -335,10 +306,10 @@ export const TrackPage: React.FC<TrackPageProps> = ({
               </div>
             </div>
             <h3 className="text-base sm:text-lg font-mono font-bold tracking-widest text-cyan-300 uppercase">
-              SEARCHING THE ASTRA NETWORK...
+              Checking application...
             </h3>
             <p className="text-xs text-slate-400 mt-2 font-sans">
-              Querying live Google Apps Script endpoint for application credentials.
+              Connecting to ASTRA registration network...
             </p>
           </GlassCard>
         )}
@@ -350,7 +321,7 @@ export const TrackPage: React.FC<TrackPageProps> = ({
             <h3 className="text-lg font-bold font-display text-white mb-2">
               APPLICATION STATUS ADVISORY
             </h3>
-            <p className="text-sm text-slate-300 max-w-md mx-auto mb-6">
+            <p className="text-sm text-slate-300 max-w-md mx-auto mb-6 font-mono">
               {errorMessage}
             </p>
             <div className="flex items-center justify-center gap-4">
@@ -367,8 +338,7 @@ export const TrackPage: React.FC<TrackPageProps> = ({
         {/* Result Found */}
         {result && !isLoading && (
           <div className="space-y-6 animate-fadeIn">
-            
-            {/* Found Banner Card */}
+            {/* Main Application Summary Card */}
             <GlassCard glowColor="cyan" className="p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
                 <div>
@@ -385,102 +355,166 @@ export const TrackPage: React.FC<TrackPageProps> = ({
                 </div>
               </div>
 
-              {/* Required Metadata: Application ID, Team ID, Team Name, Status, Team Lead, Email, College, Branch, Track */}
+              {/* Required Details Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-6">
-                
-                {/* 1. Team ID */}
+                {/* 1. Application ID */}
                 <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">TEAM ID</div>
-                  <div className="text-sm font-bold font-mono text-cyan-400 mt-1">{result.teamId || 'N/A'}</div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Hash className="w-3 h-3 text-cyan-400" />
+                    APPLICATION ID
+                  </div>
+                  <div className="text-sm font-bold font-mono text-cyan-300 mt-1">
+                    {result.applicationId}
+                  </div>
                 </div>
 
-                {/* 2. Team Name */}
+                {/* 2. Team ID */}
+                <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
+                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                    TEAM ID
+                  </div>
+                  <div className="text-sm font-bold font-mono text-cyan-400 mt-1">
+                    {result.teamId || 'N/A'}
+                  </div>
+                </div>
+
+                {/* 3. Team Name */}
                 <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
                   <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
                     <Users className="w-3 h-3 text-purple-400" />
                     TEAM NAME
                   </div>
-                  <div className="text-sm font-bold font-sans text-white mt-1">{result.teamName}</div>
+                  <div className="text-sm font-bold font-sans text-white mt-1">
+                    {result.teamName || 'N/A'}
+                  </div>
                 </div>
 
-                {/* 3. Team Lead */}
+                {/* 4. Status */}
                 <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">TEAM LEAD</div>
-                  <div className="text-sm font-bold font-sans text-[#00f2fe] mt-1">{result.teamLead}</div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-cyan-400" />
+                    STATUS
+                  </div>
+                  <div className="text-sm font-bold font-mono text-emerald-400 mt-1">
+                    {result.status || 'SUBMITTED'}
+                  </div>
                 </div>
 
-                {/* 4. Registered Email (Masked) */}
+                {/* 5. Team Lead */}
+                <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
+                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <UserCheck className="w-3 h-3 text-[#00f2fe]" />
+                    TEAM LEAD
+                  </div>
+                  <div className="text-sm font-bold font-sans text-[#00f2fe] mt-1">
+                    {result.teamLead || 'N/A'}
+                  </div>
+                </div>
+
+                {/* 6. Registered Email */}
                 <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
                   <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
                     <Mail className="w-3 h-3 text-cyan-400" />
                     REGISTERED EMAIL
                   </div>
-                  <div className="text-sm font-mono text-slate-300 mt-1 truncate">{result.email}</div>
-                </div>
-
-                {/* 5. College */}
-                <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                    <School className="w-3 h-3 text-purple-400" />
-                    COLLEGE
+                  <div className="text-sm font-mono text-slate-300 mt-1 truncate">
+                    {result.maskedEmail || result.email || 'N/A'}
                   </div>
-                  <div className="text-sm font-sans text-slate-200 mt-1 line-clamp-1">{result.college}</div>
                 </div>
 
-                {/* 6. Branch */}
+                {/* 7. Branch */}
                 <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
                   <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
                     <GitBranch className="w-3 h-3 text-emerald-400" />
                     BRANCH
                   </div>
-                  <div className="text-sm font-mono text-emerald-300 mt-1">{result.branch}</div>
+                  <div className="text-sm font-mono text-emerald-300 mt-1">
+                    {result.branch || 'N/A'}
+                  </div>
                 </div>
 
-                {/* 7. Track */}
-                <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800 sm:col-span-2 lg:col-span-3">
+                {/* Optional College (if returned by backend) */}
+                {result.college && (
+                  <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
+                    <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <School className="w-3 h-3 text-purple-400" />
+                      COLLEGE
+                    </div>
+                    <div className="text-sm font-sans text-slate-200 mt-1 line-clamp-1">
+                      {result.college}
+                    </div>
+                  </div>
+                )}
+
+                {/* 8. Problem Statement Domain */}
+                <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800">
                   <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
                     <Target className="w-3 h-3 text-cyan-400" />
-                    TRACK
+                    PROBLEM STATEMENT DOMAIN
                   </div>
-                  <div className="text-sm font-bold font-sans text-cyan-300 mt-1">{result.track}</div>
+                  <div className="text-sm font-bold font-sans text-cyan-300 mt-1">
+                    {result.domain || result.track || 'N/A'}
+                  </div>
                 </div>
 
+                {/* 9. Problem Statement */}
+                <div className="p-3.5 rounded-xl bg-space-950/80 border border-slate-800 sm:col-span-2 lg:col-span-3">
+                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <FileText className="w-3 h-3 text-purple-400" />
+                    PROBLEM STATEMENT
+                  </div>
+                  <div className="text-sm font-sans text-slate-200 mt-1 leading-relaxed">
+                    {result.problemStatement || 'N/A'}
+                  </div>
+                </div>
               </div>
 
-              {/* Dynamic Team Members List (NO separate Team Count card) */}
-              <div className="mt-6 p-5 rounded-xl bg-space-950/70 border border-slate-800">
-                <div className="text-xs font-mono text-cyan-300 uppercase font-semibold mb-3 flex items-center gap-1.5">
+              {/* TEAM MEMBERS (NO separate Team Count card) */}
+              <div className="mt-6 p-5 sm:p-6 rounded-xl bg-space-950/70 border border-slate-800">
+                <div className="text-xs font-mono text-cyan-300 uppercase font-semibold mb-4 flex items-center gap-2">
                   <Users className="w-4 h-4 text-cyan-400" />
                   <span>TEAM MEMBERS</span>
                 </div>
 
                 {result.members && result.members.length > 0 ? (
-                  <ol className="space-y-2 text-xs sm:text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {result.members.map((member, idx) => {
-                      const memberName = getMemberName(member);
-                      const isLead = idx === 0 || memberName.toLowerCase().includes('(lead)') || memberName.toLowerCase() === result.teamLead.toLowerCase();
+                      const isLead =
+                        member.role === 'Team Lead' ||
+                        (!member.role && idx === 0) ||
+                        (result.teamLead && member.name?.toLowerCase() === result.teamLead.toLowerCase());
 
                       return (
-                        <li
+                        <div
                           key={idx}
-                          className="flex items-center gap-3 p-2.5 rounded-lg bg-space-900/60 border border-slate-800/80 font-mono"
+                          className={`p-3.5 rounded-xl border font-mono flex items-center justify-between transition-colors ${
+                            isLead
+                              ? 'bg-cyan-950/30 border-cyan-500/40 shadow-[0_0_12px_rgba(0,240,255,0.08)]'
+                              : 'bg-space-900/60 border-slate-800/80'
+                          }`}
                         >
-                          <span className="w-6 h-6 rounded-full bg-cyan-950 border border-cyan-500/40 text-cyan-300 flex items-center justify-center text-xs font-bold shrink-0">
-                            {idx + 1}
-                          </span>
-                          <span className="text-white font-medium">{memberName}</span>
+                          <div>
+                            <div className="text-[11px] font-mono text-cyan-400 uppercase tracking-wider font-semibold">
+                              {member.role || (idx === 0 ? 'Team Lead' : `Team Member ${idx}`)}
+                            </div>
+                            <div className="text-sm font-bold text-white mt-1">
+                              {member.name}
+                            </div>
+                          </div>
                           {isLead && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-500/30 ml-auto font-bold tracking-wider">
+                            <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-cyan-950 text-cyan-400 border border-cyan-500/40 font-bold tracking-wider">
                               LEAD
                             </span>
                           )}
-                        </li>
+                        </div>
                       );
                     })}
-                  </ol>
+                  </div>
                 ) : (
-                  <div className="p-3 rounded bg-space-900/40 text-xs text-slate-400 font-mono">
-                    1. {result.teamLead} (Lead)
+                  <div className="p-3.5 rounded-xl bg-space-900/60 border border-slate-800/80 font-mono">
+                    <div className="text-[11px] text-cyan-400 uppercase font-semibold">Team Lead</div>
+                    <div className="text-sm font-bold text-white mt-1">{result.teamLead}</div>
                   </div>
                 )}
               </div>
@@ -590,11 +624,16 @@ export const TrackPage: React.FC<TrackPageProps> = ({
                   Thank you for submitting your innovation proposal. Due to high submission density, your team was not selected for this cohort. We encourage you to participate in upcoming campus hackathons!
                 </div>
               )}
-            </GlassCard>
 
+              {result.status?.toUpperCase() === 'DUPLICATE' && (
+                <div className="mt-6 p-4 rounded-xl bg-rose-950/30 border border-rose-500/40 text-xs text-rose-200">
+                  <span className="font-bold font-mono uppercase block mb-1">DUPLICATE ENTRY DETECTED</span>
+                  This registration was flagged as a duplicate entry (matching existing Team Name, Team Lead, or Roll Number). If you believe this is in error, please contact the organizing team.
+                </div>
+              )}
+            </GlassCard>
           </div>
         )}
-
       </div>
     </div>
   );

@@ -8,8 +8,9 @@ export type ApplicationStatus =
   | 'COMPLETED'
   | string;
 
-export interface ApplicationMember {
+export interface TeamMember {
   name: string;
+  role?: string;
 }
 
 export interface Application {
@@ -17,11 +18,14 @@ export interface Application {
   teamId: string;
   teamName: string;
   teamLead: string;
-  email: string;
-  college: string;
-  branch: string;
-  track: string;
-  members: Array<{ name: string } | string>;
+  email?: string;
+  maskedEmail?: string;
+  college?: string;
+  branch?: string;
+  problemStatement?: string;
+  domain?: string;
+  track?: string;
+  members: TeamMember[];
   memberCount?: number;
   status: ApplicationStatus;
   lastUpdated?: string;
@@ -31,11 +35,19 @@ export interface Application {
 // Backward compatibility alias
 export type ApplicationRecord = Application;
 
+export interface ApplicationResponse {
+  success: boolean;
+  message?: string;
+  application?: Application;
+  data?: Application;
+  errorCode?: string;
+}
+
 export interface TrackingResult {
   success: boolean;
   application?: Application;
   data?: Application;
   message?: string;
   error?: string;
-  errorCode?: 'EMPTY_INPUT' | 'INVALID_FORMAT' | 'NOT_FOUND' | 'NETWORK_ERROR';
+  errorCode?: string;
 }
