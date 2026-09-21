@@ -48,8 +48,8 @@ export function App() {
   };
 
   // Direct Google Form link
-  const googleFormDirectUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdqfPCTyw2vOevRxs2qXPbPI_BBqMNuBNu7HrBryhSM_HftGA/viewform?usp=sf_link";
-  const googleFormEmbedUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdqfPCTyw2vOevRxs2qXPbPI_BBqMNuBNu7HrBryhSM_HftGA/viewform?embedded=true";
+  const googleFormDirectUrl = "https://docs.google.com/forms/d/e/1FAIpQLSerATrTKrWCdcmzPtY2XnQzhWFTGkLyCfmIusaLfFzX-b2Aeg/viewform?usp=sf_link";
+  const googleFormEmbedUrl = "https://docs.google.com/forms/d/e/1FAIpQLSerATrTKrWCdcmzPtY2XnQzhWFTGkLyCfmIusaLfFzX-b2Aeg/viewform?embedded=true";
 
   return (
     <div className="cosmic-canvas text-[#e0e7ff] antialiased selection:bg-[#00f2fe] selection:text-black min-h-screen flex flex-col relative font-sans">
@@ -286,10 +286,10 @@ export function App() {
                       MTX
                     </span>
                     <span className="text-sm font-bold text-white tracking-wide group-hover:text-primary transition-colors">
-                      Industry Mentorship &amp; Certificates
+                      Industry Mentorship &amp; Guidance
                     </span>
                     <span className="text-xs text-[#9cb1cc] mt-2 leading-relaxed">
-                      Direct feedback, engineering jury, network &amp; participation certificates provided by MTX
+                      Direct feedback, engineering jury, network &amp; industry mentorship provided by MTX
                     </span>
                   </div>
                 </div>
@@ -348,7 +348,7 @@ export function App() {
                     <iframe
                       src={googleFormEmbedUrl}
                       title="ASTRA Hackathon Registration Form"
-                      className="w-full max-w-[640px] h-[850px] border-0 bg-[#050914]"
+                      className="w-full max-w-[640px] h-[950px] sm:h-[1150px] border-0 bg-[#050914]"
                       frameBorder="0"
                       marginHeight={0}
                       marginWidth={0}
@@ -467,11 +467,8 @@ export function App() {
               Contact
             </a>
             <button
-              className="hover:text-[#00f2fe] transition-colors"
-              onClick={() => {
-                setActiveTab('track');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
+              className="hover:text-[#00f2fe] transition-colors cursor-pointer"
+              onClick={navigateToTrack}
             >
               Track Application
             </button>

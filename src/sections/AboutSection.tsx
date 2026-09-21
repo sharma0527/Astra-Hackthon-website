@@ -84,10 +84,10 @@ export const AboutSection: React.FC = () => {
                 MTX
               </span>
               <span className="text-sm font-bold text-white tracking-wide group-hover:text-cyan-300 transition-colors">
-                Industry Mentorship &amp; Participation Certificates
+                Industry Mentorship &amp; Guidance
               </span>
               <span className="text-xs text-slate-400 mt-2 leading-relaxed">
-                Direct feedback, engineering jury, network &amp; participation certificates provided by MTX
+                Direct feedback, engineering jury, network &amp; industry mentorship provided by MTX
               </span>
             </div>
           </div>

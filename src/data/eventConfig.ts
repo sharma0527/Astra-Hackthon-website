@@ -51,8 +51,8 @@ export const eventConfig = {
   officialLogoUrl: "https://lh3.googleusercontent.com/aida/AEtjO1XGyUPtTHl-T3328I-NeDykDoTTx9cx2MdjYE26uTt1ySrCvcp87w7w1EIXlwWVzv_k5Gx_lO3WEQlULUgWaUJ5XUc3W1DulrZBUzugJeFb35Qoq4IND1LXZJMSTWcH28SsZ7SCTsOTKVd_k8A-IOgGcrZUcWPC54Dz-s2qwnMqEtZBc7-uYMLnmAfkFYgs4P-aIP38OVMfySkevipFPU3c12FzlFx72RR7S7ebMQ8KizDcQQpofKFWr1_O",
 
   // Exact Google Form URL
-  googleFormEmbedUrl: "https://docs.google.com/forms/d/e/1FAIpQLSdqfPCTyw2vOevRxs2qXPbPI_BBqMNuBNu7HrBryhSM_HftGA/viewform?embedded=true",
-  googleFormDirectUrl: "https://docs.google.com/forms/d/e/1FAIpQLSdqfPCTyw2vOevRxs2qXPbPI_BBqMNuBNu7HrBryhSM_HftGA/viewform?usp=sf_link",
+  googleFormEmbedUrl: "https://docs.google.com/forms/d/e/1FAIpQLSerATrTKrWCdcmzPtY2XnQzhWFTGkLyCfmIusaLfFzX-b2Aeg/viewform?embedded=true",
+  googleFormDirectUrl: "https://docs.google.com/forms/d/e/1FAIpQLSerATrTKrWCdcmzPtY2XnQzhWFTGkLyCfmIusaLfFzX-b2Aeg/viewform?usp=sf_link",
   trackingUrl: "/track",
   
   partners: [
@@ -354,7 +354,7 @@ export const eventConfig = {
           "Silver Trophy & Medals",
           "Mentorship from Tech Architects",
           "ASTRA Premium Swag Kit",
-          "Certificate of Excellence"
+          "Award of Excellence"
         ],
         color: "from-slate-300 via-slate-100 to-slate-400"
       },
@@ -366,7 +366,7 @@ export const eventConfig = {
           "Bronze Trophy & Medals",
           "Industry Recognition & Badges",
           "ASTRA Hacker Swag Kit",
-          "Certificate of Excellence"
+          "Award of Excellence"
         ],
         color: "from-amber-700 via-amber-600 to-amber-800"
       }
