@@ -435,7 +435,7 @@ export const eventConfig = {
     {
       category: "Application",
       question: "How does the Application Tracking system work?",
-      answer: "Once you complete the embedded official Google Form, our automated backend issues a unique Application ID (format: ASTRA-2026-XXXXXX) directly to your registered email. You can visit the 'Track Application' tab anytime to monitor your review, shortlisting, and confirmation status in real time."
+      answer: "Once you complete the official registration form on this website, our automated backend issues a unique Application ID (format: ASTRA-2026-XXXXXX) directly on screen and to your registered email. You can visit the 'Track Application' tab anytime to monitor your review, shortlisting, and confirmation status in real time."
     },
     {
       category: "Logistics",
@@ -448,4 +448,14 @@ export const eventConfig = {
       answer: "Yes, experienced software architects and engineers from MTX and faculty leads will conduct scheduled mentorship checkpoints, provide debugging support, and offer architectural guidance."
     }
   ] as FaqItem[]
+};
+
+export const paymentConfig = {
+  feeAmount: 999,
+  feeCurrency: "INR",
+  formattedFee: "₹999",
+  friendUpiId: "sivakottamachalla@ybl",
+  friendName: "sivakottamachalla",
+  googleFormUrl: "https://forms.gle/xhjE57wm7rUJ2HWH9",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec"
 };
