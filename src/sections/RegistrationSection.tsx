@@ -172,17 +172,112 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
       paymentConfig.friendUpiQrUrl ||
       `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon')}`
     );
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
       teamName: '',
+      teamSize: '4',
+      leadName: '',
+      leadEmail: '',
+      leadRoll: '',
+      leadBranch: 'CSE',
+      leadYear: '3rd Year',
+      leadPhone: '',
+      m2Name: '',
+      m2Email: '',
+      m2Roll: '',
+      m2Branch: 'CSE',
+      m2Year: '3rd Year',
+      m2Phone: '',
+      m3Name: '',
+      m3Email: '',
+      m3Roll: '',
+      m3Branch: 'CSE',
+      m3Year: '3rd Year',
+      m3Phone: '',
+      m4Name: '',
+      m4Email: '',
+      m4Roll: '',
+      m4Branch: 'CSE',
+      m4Year: '3rd Year',
+      m4Phone: '',
+      m5Name: '',
+      m5Email: '',
+      m5Roll: '',
+      m5Branch: 'CSE',
+      m5Year: '3rd Year',
+      m5Phone: '',
       utrNumber: ''
-    }));
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
+    // 1. Validate Team Name
+    if (!formData.teamName.trim()) {
+      setErrorMsg('Please enter your Team Name.');
+      return;
+    }
+
+    // 2. Validate Team Lead
+    const cleanLeadPhone = formData.leadPhone.trim().replace(/\D/g, '');
+    if (!formData.leadName.trim() || !formData.leadEmail.trim() || !formData.leadRoll.trim()) {
+      setErrorMsg('Please enter complete details for Team Leader (Name, Email, Roll No).');
+      return;
+    }
+    if (cleanLeadPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit Phone Number for the Team Leader.');
+      return;
+    }
+
+    // 3. Validate Member 2
+    const cleanM2Phone = formData.m2Phone.trim().replace(/\D/g, '');
+    if (!formData.m2Name.trim() || !formData.m2Email.trim() || !formData.m2Roll.trim()) {
+      setErrorMsg('Please enter complete details for Member 2 (Name, Email, Roll No).');
+      return;
+    }
+    if (cleanM2Phone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit Phone Number for Member 2.');
+      return;
+    }
+
+    // 4. Validate Member 3
+    const cleanM3Phone = formData.m3Phone.trim().replace(/\D/g, '');
+    if (!formData.m3Name.trim() || !formData.m3Email.trim() || !formData.m3Roll.trim()) {
+      setErrorMsg('Please enter complete details for Member 3 (Name, Email, Roll No).');
+      return;
+    }
+    if (cleanM3Phone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit Phone Number for Member 3.');
+      return;
+    }
+
+    // 5. Validate Member 4
+    const cleanM4Phone = formData.m4Phone.trim().replace(/\D/g, '');
+    if (!formData.m4Name.trim() || !formData.m4Email.trim() || !formData.m4Roll.trim()) {
+      setErrorMsg('Please enter complete details for Member 4 (Name, Email, Roll No).');
+      return;
+    }
+    if (cleanM4Phone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit Phone Number for Member 4.');
+      return;
+    }
+
+    // 6. Validate Member 5 if team size is 5
+    let cleanM5Phone = '';
+    if (parsedSize >= 5) {
+      cleanM5Phone = formData.m5Phone.trim().replace(/\D/g, '');
+      if (!formData.m5Name.trim() || !formData.m5Email.trim() || !formData.m5Roll.trim()) {
+        setErrorMsg('Please enter complete details for Member 5 (Name, Email, Roll No).');
+        return;
+      }
+      if (cleanM5Phone.length < 10) {
+        setErrorMsg('Please enter a valid 10-digit Phone Number for Member 5.');
+        return;
+      }
+    }
+
+    // 7. Validate Payment
     const cleanUtr = formData.utrNumber.trim().replace(/\D/g, '');
     if (!cleanUtr || cleanUtr.length < 10) {
       setErrorMsg('Please enter a valid 12-digit UTR / UPI Reference Number.');
@@ -198,43 +293,43 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
 
     try {
       const payload = {
-        teamName: formData.teamName,
+        teamName: formData.teamName.trim(),
         teamSize: parsedSize,
         // Lead
-        leadName: formData.leadName,
-        leadEmail: formData.leadEmail,
-        leadRoll: formData.leadRoll,
+        leadName: formData.leadName.trim(),
+        leadEmail: formData.leadEmail.trim(),
+        leadRoll: formData.leadRoll.trim(),
         leadBranch: formData.leadBranch,
         leadYear: formData.leadYear,
-        leadPhone: formData.leadPhone,
+        leadPhone: cleanLeadPhone,
         // Member 2
-        m2Name: formData.m2Name,
-        m2Email: formData.m2Email,
-        m2Roll: formData.m2Roll,
+        m2Name: formData.m2Name.trim(),
+        m2Email: formData.m2Email.trim(),
+        m2Roll: formData.m2Roll.trim(),
         m2Branch: formData.m2Branch,
         m2Year: formData.m2Year,
-        m2Phone: formData.m2Phone,
+        m2Phone: cleanM2Phone,
         // Member 3
-        m3Name: formData.m3Name,
-        m3Email: formData.m3Email,
-        m3Roll: formData.m3Roll,
+        m3Name: formData.m3Name.trim(),
+        m3Email: formData.m3Email.trim(),
+        m3Roll: formData.m3Roll.trim(),
         m3Branch: formData.m3Branch,
         m3Year: formData.m3Year,
-        m3Phone: formData.m3Phone,
+        m3Phone: cleanM3Phone,
         // Member 4
-        m4Name: formData.m4Name,
-        m4Email: formData.m4Email,
-        m4Roll: formData.m4Roll,
+        m4Name: formData.m4Name.trim(),
+        m4Email: formData.m4Email.trim(),
+        m4Roll: formData.m4Roll.trim(),
         m4Branch: formData.m4Branch,
         m4Year: formData.m4Year,
-        m4Phone: formData.m4Phone,
+        m4Phone: cleanM4Phone,
         // Member 5
-        m5Name: parsedSize >= 5 ? formData.m5Name : '',
-        m5Email: parsedSize >= 5 ? formData.m5Email : '',
-        m5Roll: parsedSize >= 5 ? formData.m5Roll : '',
+        m5Name: parsedSize >= 5 ? formData.m5Name.trim() : '',
+        m5Email: parsedSize >= 5 ? formData.m5Email.trim() : '',
+        m5Roll: parsedSize >= 5 ? formData.m5Roll.trim() : '',
         m5Branch: parsedSize >= 5 ? formData.m5Branch : '',
         m5Year: parsedSize >= 5 ? formData.m5Year : '',
-        m5Phone: parsedSize >= 5 ? formData.m5Phone : '',
+        m5Phone: parsedSize >= 5 ? cleanM5Phone : '',
         // Payment
         utrNumber: cleanUtr,
         screenshotBase64: screenshotBase64,
@@ -282,7 +377,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
     }
   };
 
-  const branchOptions = ['CSE', 'ECE', 'AIML', 'DS', 'IT', 'DIPLOMA'];
+  const branchOptions = ['CSE', 'ECE', 'AIML', 'DS', 'IT', 'EEE', 'MECH', 'CIVIL', 'DIPLOMA', 'OTHER'];
   const yearOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
   // =========================================================================
@@ -622,126 +717,358 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
 
             {/* Member 2 */}
             <div className="space-y-4 pt-4 border-t border-slate-800">
-              <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 2 Details</div>
+              <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                <span>Step 3: Member 2 Details</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <input
-                  type="text"
-                  required
-                  value={formData.m2Name}
-                  onChange={(e) => setFormData({ ...formData, m2Name: e.target.value })}
-                  placeholder="Member 2 Name *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
-                <input
-                  type="email"
-                  required
-                  value={formData.m2Email}
-                  onChange={(e) => setFormData({ ...formData, m2Email: e.target.value })}
-                  placeholder="Member 2 Email *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
-                <input
-                  type="text"
-                  required
-                  value={formData.m2Roll}
-                  onChange={(e) => setFormData({ ...formData, m2Roll: e.target.value })}
-                  placeholder="Member 2 Roll No *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 2 Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.m2Name}
+                    onChange={(e) => setFormData({ ...formData, m2Name: e.target.value })}
+                    placeholder="Full Name"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 2 Email <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.m2Email}
+                    onChange={(e) => setFormData({ ...formData, m2Email: e.target.value })}
+                    placeholder="member2@college.edu"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 2 Roll No <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.m2Roll}
+                    onChange={(e) => setFormData({ ...formData, m2Roll: e.target.value })}
+                    placeholder="e.g. 22NR1A0502"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 2 Branch <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={formData.m2Branch}
+                    onChange={(e) => setFormData({ ...formData, m2Branch: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 2 Year <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={formData.m2Year}
+                    onChange={(e) => setFormData({ ...formData, m2Year: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 2 Phone <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.m2Phone}
+                    onChange={(e) => setFormData({ ...formData, m2Phone: e.target.value })}
+                    placeholder="10-digit number"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Member 3 */}
             <div className="space-y-4 pt-4 border-t border-slate-800">
-              <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 3 Details</div>
+              <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                <span>Step 4: Member 3 Details</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <input
-                  type="text"
-                  required
-                  value={formData.m3Name}
-                  onChange={(e) => setFormData({ ...formData, m3Name: e.target.value })}
-                  placeholder="Member 3 Name *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
-                <input
-                  type="email"
-                  required
-                  value={formData.m3Email}
-                  onChange={(e) => setFormData({ ...formData, m3Email: e.target.value })}
-                  placeholder="Member 3 Email *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
-                <input
-                  type="text"
-                  required
-                  value={formData.m3Roll}
-                  onChange={(e) => setFormData({ ...formData, m3Roll: e.target.value })}
-                  placeholder="Member 3 Roll No *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 3 Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.m3Name}
+                    onChange={(e) => setFormData({ ...formData, m3Name: e.target.value })}
+                    placeholder="Full Name"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 3 Email <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.m3Email}
+                    onChange={(e) => setFormData({ ...formData, m3Email: e.target.value })}
+                    placeholder="member3@college.edu"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 3 Roll No <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.m3Roll}
+                    onChange={(e) => setFormData({ ...formData, m3Roll: e.target.value })}
+                    placeholder="e.g. 22NR1A0503"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 3 Branch <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={formData.m3Branch}
+                    onChange={(e) => setFormData({ ...formData, m3Branch: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 3 Year <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={formData.m3Year}
+                    onChange={(e) => setFormData({ ...formData, m3Year: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 3 Phone <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.m3Phone}
+                    onChange={(e) => setFormData({ ...formData, m3Phone: e.target.value })}
+                    placeholder="10-digit number"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Member 4 */}
             <div className="space-y-4 pt-4 border-t border-slate-800">
-              <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 4 Details</div>
+              <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                <span>Step 5: Member 4 Details</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <input
-                  type="text"
-                  required
-                  value={formData.m4Name}
-                  onChange={(e) => setFormData({ ...formData, m4Name: e.target.value })}
-                  placeholder="Member 4 Name *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
-                <input
-                  type="email"
-                  required
-                  value={formData.m4Email}
-                  onChange={(e) => setFormData({ ...formData, m4Email: e.target.value })}
-                  placeholder="Member 4 Email *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
-                <input
-                  type="text"
-                  required
-                  value={formData.m4Roll}
-                  onChange={(e) => setFormData({ ...formData, m4Roll: e.target.value })}
-                  placeholder="Member 4 Roll No *"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 4 Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.m4Name}
+                    onChange={(e) => setFormData({ ...formData, m4Name: e.target.value })}
+                    placeholder="Full Name"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 4 Email <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.m4Email}
+                    onChange={(e) => setFormData({ ...formData, m4Email: e.target.value })}
+                    placeholder="member4@college.edu"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 4 Roll No <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.m4Roll}
+                    onChange={(e) => setFormData({ ...formData, m4Roll: e.target.value })}
+                    placeholder="e.g. 22NR1A0504"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 4 Branch <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={formData.m4Branch}
+                    onChange={(e) => setFormData({ ...formData, m4Branch: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 4 Year <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={formData.m4Year}
+                    onChange={(e) => setFormData({ ...formData, m4Year: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Member 4 Phone <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.m4Phone}
+                    onChange={(e) => setFormData({ ...formData, m4Phone: e.target.value })}
+                    placeholder="10-digit number"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Optional Member 5 */}
             {parsedSize >= 5 && (
               <div className="space-y-4 pt-4 border-t border-slate-800">
-                <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 5 Details</div>
+                <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                  <span>Step 6: Member 5 Details</span>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <input
-                    type="text"
-                    required
-                    value={formData.m5Name}
-                    onChange={(e) => setFormData({ ...formData, m5Name: e.target.value })}
-                    placeholder="Member 5 Name *"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                  />
-                  <input
-                    type="email"
-                    required
-                    value={formData.m5Email}
-                    onChange={(e) => setFormData({ ...formData, m5Email: e.target.value })}
-                    placeholder="Member 5 Email *"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                  />
-                  <input
-                    type="text"
-                    required
-                    value={formData.m5Roll}
-                    onChange={(e) => setFormData({ ...formData, m5Roll: e.target.value })}
-                    placeholder="Member 5 Roll No *"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Member 5 Name <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.m5Name}
+                      onChange={(e) => setFormData({ ...formData, m5Name: e.target.value })}
+                      placeholder="Full Name"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Member 5 Email <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={formData.m5Email}
+                      onChange={(e) => setFormData({ ...formData, m5Email: e.target.value })}
+                      placeholder="member5@college.edu"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Member 5 Roll No <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.m5Roll}
+                      onChange={(e) => setFormData({ ...formData, m5Roll: e.target.value })}
+                      placeholder="e.g. 22NR1A0505"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Member 5 Branch <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={formData.m5Branch}
+                      onChange={(e) => setFormData({ ...formData, m5Branch: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                    >
+                      {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Member 5 Year <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={formData.m5Year}
+                      onChange={(e) => setFormData({ ...formData, m5Year: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                    >
+                      {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Member 5 Phone <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={formData.m5Phone}
+                      onChange={(e) => setFormData({ ...formData, m5Phone: e.target.value })}
+                      placeholder="10-digit number"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -750,7 +1077,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
             <div className="pt-6 border-t border-slate-800 space-y-5">
               <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
-                <span>Step 3: Registration Fee &amp; UPI Verification</span>
+                <span>Final Step: Registration Fee &amp; UPI Verification</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center p-5 rounded-xl bg-[#050914] border border-[#00f2fe]/30">

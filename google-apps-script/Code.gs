@@ -2834,25 +2834,25 @@ function doPost(e) {
       cleanText_(data.m2Roll),              // 12. Member 2 Roll No
       cleanText_(data.m2Branch),            // 13. Member 2 Branch
       cleanText_(data.m2Year),              // 14. Member 2 Year
-      cleanText_(data.m2Phone),             // 15. Member 2 Phone Number
+      normalizePhone_(data.m2Phone),        // 15. Member 2 Phone Number
       cleanText_(data.m3Name),              // 16. Member 3 Name
       normalizeEmail_(data.m3Email),        // 17. Member 3 Email
       cleanText_(data.m3Roll),              // 18. Member 3 Roll No
       cleanText_(data.m3Branch),            // 19. Member 3 Branch
       cleanText_(data.m3Year),              // 20. Member 3 Year
-      cleanText_(data.m3Phone),             // 21. Member 3 Phone Number
+      normalizePhone_(data.m3Phone),        // 21. Member 3 Phone Number
       cleanText_(data.m4Name),              // 22. Member 4 Name
       normalizeEmail_(data.m4Email),        // 23. Member 4 Email
       cleanText_(data.m4Roll),              // 24. Member 4 Roll No
       cleanText_(data.m4Branch),            // 25. Member 4 Branch
       cleanText_(data.m4Year),              // 26. Member 4 Year
-      cleanText_(data.m4Phone),             // 27. Member 4 Phone Number
+      normalizePhone_(data.m4Phone),        // 27. Member 4 Phone Number
       cleanText_(data.m5Name),              // 28. Member 5 Name
       normalizeEmail_(data.m5Email),        // 29. Member 5 Email
       cleanText_(data.m5Roll),              // 30. Member 5 Roll No
       cleanText_(data.m5Branch),            // 31. Member 5 Branch
       cleanText_(data.m5Year),              // 32. Member 5 Year
-      cleanText_(data.m5Phone),             // 33. Member 5 Phone Number
+      data.m5Phone ? normalizePhone_(data.m5Phone) : '', // 33. Member 5 Phone Number
       inputUtr,                             // 34. ENTER THE UTR NUMBER
       screenshotUrl                         // 35. PAYMENT PICTURE
     ]);
