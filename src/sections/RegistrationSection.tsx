@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  CheckCircle2, AlertTriangle, Loader2, ArrowRight, 
-  Home, Copy, Check, Upload, ShieldCheck, X
+  AlertTriangle, Loader2, 
+  Home, Copy, Check, Upload, ShieldCheck, X, Sparkles, RefreshCw, Trophy, Calendar, MapPin, Search, ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { paymentConfig } from '../data/eventConfig';
+import { ParticleText } from '../components/ui/ParticleText';
 
 interface RegistrationSectionProps {
   onGoToTrack?: () => void;
@@ -60,26 +61,40 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
-  
-  const [successInfo, setSuccessInfo] = useState<{
+  const [qrImgSrc, setQrImgSrc] = useState(
+    paymentConfig.friendUpiQrUrl ||
+    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon')}`
+  );
+
+  // Check if current device has a completed registration
+  const [savedRegistration, setSavedRegistration] = useState<{
     registrationId: string;
     teamName: string;
     leadEmail: string;
     utr: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('astra_completed_registration');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const parsedSize = parseInt(formData.teamSize, 10);
 
   useEffect(() => {
-    if (successInfo) {
-      confetti({
-        particleCount: 120,
-        spread: 75,
-        origin: { y: 0.6 },
-        colors: ['#00f2fe', '#4facfe', '#7928ca', '#ffffff']
-      });
+    if (savedRegistration) {
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#00f2fe', '#8b5cf6', '#4facfe', '#ffffff']
+        });
+      } catch {}
     }
-  }, [successInfo]);
+  }, [savedRegistration]);
 
   // Image Upload & Canvas Compression for instant <200KB upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,11 +153,30 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
   };
 
   const copyRegistrationId = () => {
-    if (successInfo?.registrationId) {
-      navigator.clipboard.writeText(successInfo.registrationId);
+    if (savedRegistration?.registrationId) {
+      navigator.clipboard.writeText(savedRegistration.registrationId);
       setCopiedId(true);
       setTimeout(() => setCopiedId(false), 2000);
     }
+  };
+
+  const handleRegisterAnotherTeam = () => {
+    try {
+      localStorage.removeItem('astra_completed_registration');
+      window.dispatchEvent(new Event('registrationChange'));
+    } catch {}
+    setSavedRegistration(null);
+    setScreenshotBase64('');
+    setPreviewUrl('');
+    setQrImgSrc(
+      paymentConfig.friendUpiQrUrl ||
+      `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon')}`
+    );
+    setFormData(prev => ({
+      ...prev,
+      teamName: '',
+      utrNumber: ''
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,12 +261,17 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
       }
 
       if (data.status === 'success') {
-        setSuccessInfo({
+        const info = {
           registrationId: data.registrationId,
           teamName: data.teamName,
           leadEmail: data.leadEmail,
           utr: data.utr || cleanUtr
-        });
+        };
+        setSavedRegistration(info);
+        try {
+          localStorage.setItem('astra_completed_registration', JSON.stringify(info));
+          window.dispatchEvent(new Event('registrationChange'));
+        } catch {}
       } else {
         setErrorMsg(data.message || 'Payment verification failed. Please check your payment details.');
       }
@@ -246,79 +285,173 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
   const branchOptions = ['CSE', 'ECE', 'AIML', 'DS', 'IT', 'DIPLOMA'];
   const yearOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
-  // SUCCESS SCREEN
-  if (successInfo) {
+  // =========================================================================
+  // VIEW 1: REGISTRATION COMPLETED -> SHOW ASTRA HACKATHON PARTICLE TEXT
+  // =========================================================================
+  if (savedRegistration) {
     return (
-      <section className="py-16 px-4 sm:px-6 relative z-10" id="register">
-        <div className="max-w-xl mx-auto cyber-glass-card hud-brackets rounded-2xl p-8 sm:p-10 border border-[#00f2fe]/40 shadow-[0_0_60px_rgba(0,242,254,0.25)] text-center font-mono">
-          <div className="w-16 h-16 bg-[#00f2fe]/10 rounded-full border border-[#00f2fe] flex items-center justify-center mx-auto mb-4 shadow-[0_0_25px_rgba(0,242,254,0.4)]">
-            <CheckCircle2 className="w-10 h-10 text-[#00f2fe]" />
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-3">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>AI Verified &amp; Saved to Sheet</span>
-          </div>
-
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
-            REGISTRATION CONFIRMED
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-300 mb-6 font-sans">
-            Welcome to ASTRA Hackathon 2026! Team <strong className="text-[#00f2fe]">{successInfo.teamName}</strong> is recorded.
-          </p>
-
-          <div className="bg-[#050914] border border-[#00f2fe]/30 rounded-xl p-5 mb-6 text-left relative overflow-hidden">
-            <div className="absolute top-0 right-0 px-3 py-1 bg-[#00f2fe]/10 border-b border-l border-[#00f2fe]/30 text-[10px] text-[#00f2fe] uppercase tracking-widest font-mono">
-              OFFICIAL ENTRY
-            </div>
+      <section className="py-16 md:py-20 px-4 sm:px-6 relative z-10" id="register">
+        <div className="max-w-5xl mx-auto">
+          
+          {/* Main Card with Cyber Glass & Glowing Border */}
+          <div className="cyber-glass-card hud-brackets rounded-3xl p-6 sm:p-10 border border-[#00f2fe]/40 shadow-[0_0_90px_rgba(0,242,254,0.25)] text-center relative overflow-hidden bg-[#060a18]/95 font-sans">
             
-            <span className="text-[11px] text-slate-400 uppercase tracking-widest block mb-1">
-              Your Application ID
-            </span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-[#00f2fe] tracking-wider mb-2 font-mono">
-              {successInfo.registrationId}
+            {/* Top Status Header */}
+            <div className="flex items-center justify-center mb-4">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/15 border border-[#00f2fe]/40 text-[#00f2fe] text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(0,242,254,0.2)] font-mono">
+                <span className="w-2 h-2 rounded-full bg-[#00f2fe] animate-pulse"></span>
+                <span>REGISTRATION COMPLETE • FINAL ROUND ACTIVE</span>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800 text-xs text-slate-300 font-sans">
-              <span>Verified UTR: <strong className="text-cyan-300 font-mono">{successInfo.utr}</strong></span>
-              <span className="text-slate-600">•</span>
-              <span>Saved in official sheet for: <strong className="text-slate-200">{successInfo.leadEmail}</strong></span>
+            {/* Dazzling Interactive ParticleText Canvas showing only ASTRA HACKATHON */}
+            <div className="w-full h-[280px] sm:h-[350px] md:h-[400px] rounded-2xl overflow-hidden relative my-3 bg-[#050713]/90 border border-[#00f2fe]/30 shadow-[inset_0_0_50px_rgba(0,0,0,0.85)] flex items-center justify-center">
+              <div className="absolute top-3 left-4 text-[10px] sm:text-xs font-mono text-[#00f2fe]/75 tracking-widest uppercase flex items-center gap-1.5 pointer-events-none z-10">
+                <Sparkles className="w-3.5 h-3.5 text-[#00f2fe] animate-pulse" />
+                <span>Interactive Particles • Move cursor / touch canvas</span>
+              </div>
+
+              <ParticleText
+                text="ASTRA HACKATHON"
+                particleSize={2.4}
+                density={4}
+                color="#00f2fe"
+                highlightColor="#8b5cf6"
+                scatter={190}
+                gatherDuration={1600}
+                stagger={420}
+                pointerRepel={45}
+                repelRadius={130}
+                idleDrift={0.8}
+                trigger="mount"
+                fontSize="clamp(2.4rem, 8vw, 6rem)"
+                fontWeight={900}
+                fontFamily="inherit"
+                glow={true}
+              />
             </div>
 
-            <button
-              onClick={copyRegistrationId}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-[#00f2fe]/50 transition"
-            >
-              {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedId ? 'Copied to Clipboard' : 'Copy Application ID'}</span>
-            </button>
-          </div>
+            {/* Exact Requested Heading */}
+            <div className="mt-6 mb-8 max-w-2xl mx-auto">
+              <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-3 font-display">
+                Welcome to ASTRA Hackathon Grand Finale 2026!
+              </h2>
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-sans">
+                Your registration is confirmed. Shortlisted teams are advancing to the offline engineering marathon at{' '}
+                <span className="text-[#00f2fe] font-semibold">NRI Institute of Technology</span>. Check your live application status below.
+              </p>
+            </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a
-              href="#hero"
-              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#00f2fe] text-black font-extrabold text-xs uppercase tracking-wider hover:bg-cyan-300 transition shadow-[0_0_20px_rgba(0,242,254,0.3)] font-mono"
-            >
-              <Home className="w-4 h-4" />
-              <span>Back to Home</span>
-            </a>
+            {/* Event Quick Intel Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 max-w-2xl mx-auto mb-8 font-mono text-xs text-left">
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-[#00f2fe]/20 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#00f2fe]/10 border border-[#00f2fe]/30 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4 text-[#00f2fe]" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Date</span>
+                  <span className="font-bold text-white text-xs">21-09-2026</span>
+                </div>
+              </div>
 
-            {onGoToTrack && (
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-[#00f2fe]/20 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#8b5cf6]/10 border border-[#8b5cf6]/30 flex items-center justify-center shrink-0">
+                  <MapPin className="w-4 h-4 text-[#8b5cf6]" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Location</span>
+                  <span className="font-bold text-white text-xs truncate">NRIIT, Perecharla</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-[#00f2fe]/20 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                  <Trophy className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Format</span>
+                  <span className="font-bold text-white text-xs">Offline Prototype Final</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Application ID Card */}
+            <div className="bg-[#050914] border border-[#00f2fe]/40 rounded-2xl p-5 mb-8 text-left relative overflow-hidden max-w-xl mx-auto font-mono shadow-[0_0_35px_rgba(0,242,254,0.15)]">
+              <div className="absolute top-0 right-0 px-3 py-1 bg-[#00f2fe]/10 border-b border-l border-[#00f2fe]/30 text-[10px] text-[#00f2fe] uppercase tracking-widest">
+                OFFICIAL ENTRY
+              </div>
+              
+              <span className="text-[11px] text-slate-400 uppercase tracking-widest block mb-1">
+                Your Application ID
+              </span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-[#00f2fe] tracking-wider mb-2">
+                {savedRegistration.registrationId}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800 text-xs text-slate-300 font-sans">
+                {savedRegistration.teamName && (
+                  <span>Team: <strong className="text-white">{savedRegistration.teamName}</strong></span>
+                )}
+                {savedRegistration.leadEmail && (
+                  <>
+                    <span className="text-slate-600">•</span>
+                    <span>Lead: <strong className="text-slate-200">{savedRegistration.leadEmail}</strong></span>
+                  </>
+                )}
+              </div>
+
               <button
-                onClick={onGoToTrack}
-                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#0a122e] border border-[#00f2fe]/40 text-cyan-300 font-bold text-xs uppercase tracking-wider hover:bg-[#00f2fe]/10 transition font-mono"
+                type="button"
+                onClick={copyRegistrationId}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-[#00f2fe]/50 transition"
               >
-                <span>Track Application</span>
-                <ArrowRight className="w-4 h-4" />
+                {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedId ? 'Copied to Clipboard' : 'Copy Application ID'}</span>
               </button>
-            )}
+            </div>
+
+            {/* Action Navigation Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3.5 justify-center items-center font-mono">
+              {onGoToTrack && (
+                <button
+                  type="button"
+                  onClick={onGoToTrack}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-black font-extrabold text-xs uppercase tracking-wider hover:brightness-110 transition shadow-[0_0_25px_rgba(0,242,254,0.4)]"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Track Application Status</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+
+              <a
+                href="#about"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-[#0a122e] border border-[#00f2fe]/40 text-cyan-300 font-bold text-xs uppercase tracking-wider hover:bg-[#00f2fe]/10 transition"
+              >
+                <Home className="w-4 h-4" />
+                <span>Explore Event Details</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={handleRegisterAnotherTeam}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-slate-400 hover:text-white text-xs tracking-wider transition hover:bg-white/5"
+                title="Reset form to register another team"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Register Another Team</span>
+              </button>
+            </div>
+
           </div>
         </div>
       </section>
     );
   }
 
-  // FORM INTERFACE
+  // =========================================================================
+  // VIEW 2: NOT REGISTERED YET -> SHOW REGISTRATION FORM
+  // =========================================================================
   return (
     <section className="py-12 md:py-16 px-4 sm:px-6 relative z-10" id="register">
       <div className="max-w-4xl mx-auto">
@@ -347,366 +480,394 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f2fe] opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#00f2fe] shadow-[0_0_8px_#00f2fe]"></span>
               </span>
-              <span className="font-bold text-white tracking-wide font-mono">
-                Official Intake &amp; AI Anti-Scam Shield
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold uppercase tracking-wider font-mono">
-                ACTIVE
-              </span>
+              <span className="font-bold text-white tracking-wide font-mono">REGISTRATION PORTAL OPEN</span>
             </div>
-            
-            <div className="text-[11px] text-slate-400 font-mono">
-              Fee: <strong className="text-[#00f2fe]">{paymentConfig.formattedFee}</strong> per team
+            <div className="text-slate-400 font-mono text-[11px]">
+              ₹{paymentConfig.registrationFee} per team • Verified Online
             </div>
           </div>
 
-          {/* Option: Launch in Official Google Form */}
-          <div className="mb-6 p-4 rounded-xl bg-[#071026] border border-[#00f2fe]/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_20px_rgba(0,242,254,0.1)]">
-            <div className="flex items-center gap-2.5 text-xs text-slate-200 text-center sm:text-left">
-              <span className="material-symbols-outlined text-[#00f2fe] text-lg shrink-0">description</span>
-              <div>
-                <span className="font-bold text-white block sm:inline">Prefer filling via Google Forms? </span>
-                <span className="text-slate-400 text-[11px]">Direct intake with standard Google Drive upload.</span>
-              </div>
-            </div>
-
-            <a
-              href={paymentConfig.googleFormUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-space-950 border border-[#00f2fe]/50 text-[#00f2fe] hover:bg-[#00f2fe]/10 font-bold text-xs uppercase tracking-wider transition shrink-0 font-mono shadow-[0_0_15px_rgba(0,242,254,0.2)]"
-            >
-              <span>OPEN GOOGLE FORM</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </a>
-          </div>
-
-          {/* Error / Anti-Scam Rejection Banner */}
           {errorMsg && (
-            <div className="mb-6 p-4 rounded-xl bg-red-950/90 border border-red-500/60 flex items-start gap-3 text-red-200 text-xs sm:text-sm shadow-[0_0_25px_rgba(239,68,68,0.25)]">
-              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="mb-6 p-4 rounded-xl bg-red-950/60 border border-red-500/50 flex items-start gap-3 text-red-200 text-xs sm:text-sm animate-fade-in font-sans">
+              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-red-300 font-mono tracking-wide uppercase">Verification Blocked</p>
-                <p className="mt-0.5">{errorMsg}</p>
+                <strong className="block font-semibold text-red-300">Submission Notice</strong>
+                {errorMsg}
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-8">
             
-            {/* Step 1: Team Name & Team Size */}
+            {/* Team Basics */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-[#00f2fe] uppercase tracking-wider">
-                  Step 1: Team Setup
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">All fields marked * are required</span>
+              <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                <span>Step 1: Team Information</span>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-mono text-cyan-300 mb-1.5 uppercase">TEAM NAME *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Team Name <span className="text-red-400">*</span>
+                  </label>
                   <input
-                    required
                     type="text"
-                    placeholder="e.g. ASTRA CREW"
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3.5 py-2.5 text-white text-sm outline-none transition"
+                    required
                     value={formData.teamName}
-                    onChange={e => setFormData({ ...formData, teamName: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
+                    placeholder="e.g. CyberKnights"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition font-sans"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-mono text-cyan-300 mb-1.5 uppercase">TEAM SIZE *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Total Team Members <span className="text-red-400">*</span>
+                  </label>
                   <select
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2.5 text-white text-sm outline-none transition"
                     value={formData.teamSize}
-                    onChange={e => setFormData({ ...formData, teamSize: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, teamSize: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition font-sans"
                   >
-                    <option value="4">4 Members (Lead + 3 Members)</option>
-                    <option value="5">5 Members (Lead + 4 Members)</option>
+                    <option value="4">4 Members (Standard Team)</option>
+                    <option value="5">5 Members (Extended Team)</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            {/* Team Lead Section */}
-            <div className="pt-4 border-t border-slate-800 space-y-3">
-              <span className="text-xs font-mono text-[#00f2fe] uppercase tracking-widest block">
-                Team Lead Details
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Team Lead */}
+            <div className="space-y-4 pt-4 border-t border-slate-800">
+              <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                <span>Step 2: Team Leader Details</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Team Lead Name *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Lead Name <span className="text-red-400">*</span>
+                  </label>
                   <input
-                    required
                     type="text"
-                    placeholder="Full Name"
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none"
+                    required
                     value={formData.leadName}
-                    onChange={e => setFormData({ ...formData, leadName: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, leadName: e.target.value })}
+                    placeholder="Full Name"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Team Lead Email *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Lead Email <span className="text-red-400">*</span>
+                  </label>
                   <input
-                    required
                     type="email"
-                    placeholder="Lead Email (1 use only)"
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none"
+                    required
                     value={formData.leadEmail}
-                    onChange={e => setFormData({ ...formData, leadEmail: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, leadEmail: e.target.value })}
+                    placeholder="lead@college.edu"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Team Lead Roll No *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Lead Roll No <span className="text-red-400">*</span>
+                  </label>
                   <input
-                    required
                     type="text"
-                    placeholder="e.g. 21NR1A0501"
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none"
-                    value={formData.leadRoll}
-                    onChange={e => setFormData({ ...formData, leadRoll: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Team Lead Branch *</label>
-                  <select
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none"
-                    value={formData.leadBranch}
-                    onChange={e => setFormData({ ...formData, leadBranch: e.target.value })}
-                  >
-                    {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Team Lead Year *</label>
-                  <select
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none"
-                    value={formData.leadYear}
-                    onChange={e => setFormData({ ...formData, leadYear: e.target.value })}
-                  >
-                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Team Lead Phone Number *</label>
-                  <input
                     required
+                    value={formData.leadRoll}
+                    onChange={(e) => setFormData({ ...formData, leadRoll: e.target.value })}
+                    placeholder="e.g. 22NR1A0501"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Branch</label>
+                  <select
+                    value={formData.leadBranch}
+                    onChange={(e) => setFormData({ ...formData, leadBranch: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Year</label>
+                  <select
+                    value={formData.leadYear}
+                    onChange={(e) => setFormData({ ...formData, leadYear: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  >
+                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Lead Phone <span className="text-red-400">*</span>
+                  </label>
+                  <input
                     type="tel"
-                    placeholder="10-digit Mobile No"
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none"
+                    required
                     value={formData.leadPhone}
-                    onChange={e => setFormData({ ...formData, leadPhone: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, leadPhone: e.target.value })}
+                    placeholder="10-digit number"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Member 2 Details */}
-            <div className="pt-3 border-t border-slate-800/80 space-y-3">
-              <span className="text-xs font-mono text-cyan-300 uppercase tracking-widest block">
-                Member 2 Details
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <input required type="text" placeholder="Member 2 Name *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m2Name} onChange={e => setFormData({ ...formData, m2Name: e.target.value })} />
-                <input required type="email" placeholder="Member 2 Email *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m2Email} onChange={e => setFormData({ ...formData, m2Email: e.target.value })} />
-                <input required type="text" placeholder="Member 2 Roll No *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m2Roll} onChange={e => setFormData({ ...formData, m2Roll: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m2Branch} onChange={e => setFormData({ ...formData, m2Branch: e.target.value })}>
-                  {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m2Year} onChange={e => setFormData({ ...formData, m2Year: e.target.value })}>
-                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-                <input required type="tel" placeholder="Member 2 Phone Number *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m2Phone} onChange={e => setFormData({ ...formData, m2Phone: e.target.value })} />
-              </div>
-            </div>
-
-            {/* Member 3 Details */}
-            <div className="pt-3 border-t border-slate-800/80 space-y-3">
-              <span className="text-xs font-mono text-cyan-300 uppercase tracking-widest block">
-                Member 3 Details
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <input required type="text" placeholder="Member 3 Name *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m3Name} onChange={e => setFormData({ ...formData, m3Name: e.target.value })} />
-                <input required type="email" placeholder="Member 3 Email *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m3Email} onChange={e => setFormData({ ...formData, m3Email: e.target.value })} />
-                <input required type="text" placeholder="Member 3 Roll No *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m3Roll} onChange={e => setFormData({ ...formData, m3Roll: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m3Branch} onChange={e => setFormData({ ...formData, m3Branch: e.target.value })}>
-                  {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m3Year} onChange={e => setFormData({ ...formData, m3Year: e.target.value })}>
-                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-                <input required type="tel" placeholder="Member 3 Phone Number *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m3Phone} onChange={e => setFormData({ ...formData, m3Phone: e.target.value })} />
+            {/* Member 2 */}
+            <div className="space-y-4 pt-4 border-t border-slate-800">
+              <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 2 Details</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  required
+                  value={formData.m2Name}
+                  onChange={(e) => setFormData({ ...formData, m2Name: e.target.value })}
+                  placeholder="Member 2 Name *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+                <input
+                  type="email"
+                  required
+                  value={formData.m2Email}
+                  onChange={(e) => setFormData({ ...formData, m2Email: e.target.value })}
+                  placeholder="Member 2 Email *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+                <input
+                  type="text"
+                  required
+                  value={formData.m2Roll}
+                  onChange={(e) => setFormData({ ...formData, m2Roll: e.target.value })}
+                  placeholder="Member 2 Roll No *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
               </div>
             </div>
 
-            {/* Member 4 Details */}
-            <div className="pt-3 border-t border-slate-800/80 space-y-3">
-              <span className="text-xs font-mono text-cyan-300 uppercase tracking-widest block">
-                Member 4 Details
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <input required type="text" placeholder="Member 4 Name *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m4Name} onChange={e => setFormData({ ...formData, m4Name: e.target.value })} />
-                <input required type="email" placeholder="Member 4 Email *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m4Email} onChange={e => setFormData({ ...formData, m4Email: e.target.value })} />
-                <input required type="text" placeholder="Member 4 Roll No *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m4Roll} onChange={e => setFormData({ ...formData, m4Roll: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m4Branch} onChange={e => setFormData({ ...formData, m4Branch: e.target.value })}>
-                  {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m4Year} onChange={e => setFormData({ ...formData, m4Year: e.target.value })}>
-                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-                <input required type="tel" placeholder="Member 4 Phone Number *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m4Phone} onChange={e => setFormData({ ...formData, m4Phone: e.target.value })} />
+            {/* Member 3 */}
+            <div className="space-y-4 pt-4 border-t border-slate-800">
+              <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 3 Details</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  required
+                  value={formData.m3Name}
+                  onChange={(e) => setFormData({ ...formData, m3Name: e.target.value })}
+                  placeholder="Member 3 Name *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+                <input
+                  type="email"
+                  required
+                  value={formData.m3Email}
+                  onChange={(e) => setFormData({ ...formData, m3Email: e.target.value })}
+                  placeholder="Member 3 Email *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+                <input
+                  type="text"
+                  required
+                  value={formData.m3Roll}
+                  onChange={(e) => setFormData({ ...formData, m3Roll: e.target.value })}
+                  placeholder="Member 3 Roll No *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
               </div>
             </div>
 
-            {/* Member 5 Details (Optional / if team size is 5) */}
+            {/* Member 4 */}
+            <div className="space-y-4 pt-4 border-t border-slate-800">
+              <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 4 Details</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  required
+                  value={formData.m4Name}
+                  onChange={(e) => setFormData({ ...formData, m4Name: e.target.value })}
+                  placeholder="Member 4 Name *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+                <input
+                  type="email"
+                  required
+                  value={formData.m4Email}
+                  onChange={(e) => setFormData({ ...formData, m4Email: e.target.value })}
+                  placeholder="Member 4 Email *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+                <input
+                  type="text"
+                  required
+                  value={formData.m4Roll}
+                  onChange={(e) => setFormData({ ...formData, m4Roll: e.target.value })}
+                  placeholder="Member 4 Roll No *"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                />
+              </div>
+            </div>
+
+            {/* Optional Member 5 */}
             {parsedSize >= 5 && (
-              <div className="pt-3 border-t border-slate-800/80 space-y-3">
-                <span className="text-xs font-mono text-cyan-300 uppercase tracking-widest block">
-                  Member 5 Details
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input required type="text" placeholder="Member 5 Name *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m5Name} onChange={e => setFormData({ ...formData, m5Name: e.target.value })} />
-                  <input required type="email" placeholder="Member 5 Email *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m5Email} onChange={e => setFormData({ ...formData, m5Email: e.target.value })} />
-                  <input required type="text" placeholder="Member 5 Roll No *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m5Roll} onChange={e => setFormData({ ...formData, m5Roll: e.target.value })} />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m5Branch} onChange={e => setFormData({ ...formData, m5Branch: e.target.value })}>
-                    {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                  <select className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m5Year} onChange={e => setFormData({ ...formData, m5Year: e.target.value })}>
-                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                  <input required type="tel" placeholder="Member 5 Phone Number *" className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3 py-2 text-white text-sm outline-none" value={formData.m5Phone} onChange={e => setFormData({ ...formData, m5Phone: e.target.value })} />
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                <div className="text-xs font-mono text-cyan-300 uppercase font-bold">Member 5 Details</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <input
+                    type="text"
+                    required
+                    value={formData.m5Name}
+                    onChange={(e) => setFormData({ ...formData, m5Name: e.target.value })}
+                    placeholder="Member 5 Name *"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                  <input
+                    type="email"
+                    required
+                    value={formData.m5Email}
+                    onChange={(e) => setFormData({ ...formData, m5Email: e.target.value })}
+                    placeholder="Member 5 Email *"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
+                  <input
+                    type="text"
+                    required
+                    value={formData.m5Roll}
+                    onChange={(e) => setFormData({ ...formData, m5Roll: e.target.value })}
+                    placeholder="Member 5 Roll No *"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm focus:outline-none transition"
+                  />
                 </div>
               </div>
             )}
 
-            {/* Step 2: Pay Registration Fee */}
-            <div className="pt-5 border-t border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-[#00f2fe] uppercase tracking-wider">
-                  Step 2: Pay Registration Fee ({paymentConfig.formattedFee})
-                </span>
-                <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> AI Anti-Scam Verified
-                </span>
+            {/* Payment & Verification Section */}
+            <div className="pt-6 border-t border-slate-800 space-y-5">
+              <div className="flex items-center gap-2 text-[#00f2fe] text-xs font-mono tracking-wider uppercase font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]"></span>
+                <span>Step 3: Registration Fee &amp; UPI Verification</span>
               </div>
 
-              {/* Clean UPI QR Card - Cleaned as requested */}
-              <div className="bg-[#050914] border border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5">
-                <div className="w-36 h-36 bg-white rounded-xl p-2 flex items-center justify-center shadow-lg shrink-0">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      `upi://pay?pa=${paymentConfig.friendUpiId}&pn=${paymentConfig.friendName}&am=${paymentConfig.feeAmount}&cu=INR`
-                    )}`} 
-                    alt="UPI QR Code" 
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-
-                <div className="flex-1 text-center sm:text-left space-y-2">
-                  <div className="text-xs text-slate-300">
-                    Scan via any UPI App (GPay / PhonePe / Paytm / BHIM) to pay <strong className="text-[#00f2fe]">{paymentConfig.formattedFee}</strong>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center p-5 rounded-xl bg-[#050914] border border-[#00f2fe]/30">
+                
+                {/* UPI QR & Details */}
+                <div className="flex flex-col items-center sm:flex-row gap-4">
+                  <div className="w-32 h-32 rounded-xl bg-white p-2 shrink-0 shadow-[0_0_20px_rgba(0,242,254,0.25)] flex items-center justify-center">
+                    <img
+                      src={qrImgSrc}
+                      alt="UPI QR Code - Scan to Pay ₹999"
+                      className="w-full h-full object-contain"
+                      onError={() => {
+                        setQrImgSrc(
+                          `https://quickchart.io/qr?text=${encodeURIComponent(
+                            'upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon'
+                          )}&size=300`
+                        );
+                      }}
+                    />
                   </div>
-
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-white">
-                    <span>{paymentConfig.friendUpiId}</span>
-                    <button 
-                      type="button" 
-                      onClick={copyUpi} 
-                      className="text-[#00f2fe] hover:text-cyan-300 flex items-center gap-1 font-sans text-[11px]"
+                  <div className="text-center sm:text-left text-xs space-y-1.5">
+                    <span className="text-[#00f2fe] font-mono uppercase tracking-wider block font-bold">
+                      Scan to Pay {paymentConfig.formattedFee}
+                    </span>
+                    <p className="text-slate-300">
+                      Recipient: <strong className="text-white">{paymentConfig.friendName}</strong>
+                    </p>
+                    <p className="text-slate-400 font-mono text-[11px] break-all">
+                      {paymentConfig.friendUpiId}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={copyUpi}
+                      className="inline-flex items-center gap-1.5 text-[11px] text-cyan-300 hover:text-white px-2.5 py-1 rounded bg-white/5 border border-white/10 transition mt-1 font-mono"
                     >
-                      {copiedUpi ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                      {copiedUpi ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedUpi ? 'Copied UPI ID' : 'Copy UPI ID'}</span>
                     </button>
                   </div>
                 </div>
-              </div>
 
-              {/* ENTER THE UTR NUMBER & PAYMENT PICTURE */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-mono text-cyan-300 mb-1.5 uppercase">
-                    ENTER THE UTR NUMBER *
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    maxLength={12}
-                    placeholder="12-digit UPI Ref / UTR"
-                    className="w-full bg-[#050914] border border-slate-700 focus:border-[#00f2fe] rounded-lg px-3.5 py-2.5 text-white text-sm font-mono tracking-wider outline-none transition"
-                    value={formData.utrNumber}
-                    onChange={e => setFormData({ ...formData, utrNumber: e.target.value.replace(/\D/g, '') })}
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Digits: {formData.utrNumber.length}/12
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono text-cyan-300 mb-1.5 uppercase">
-                    PAYMENT PICTURE *
-                  </label>
-                  
-                  {previewUrl ? (
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-[#050914] border border-[#00f2fe]/40">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <img src={previewUrl} alt="Preview" className="w-10 h-10 rounded object-cover border border-slate-700 shrink-0" />
-                        <span className="text-xs text-emerald-400 font-mono truncate">✓ Picture Selected</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={removeScreenshot}
-                        className="text-slate-400 hover:text-red-400 p-1 rounded transition"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="w-full bg-[#050914] border border-dashed border-slate-700 hover:border-[#00f2fe] rounded-lg px-3.5 py-2.5 text-slate-300 text-xs flex items-center justify-between cursor-pointer transition">
-                      <span className="truncate">Upload Payment Screenshot</span>
-                      <Upload className="w-4 h-4 text-[#00f2fe]" />
-                      <input required type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                {/* UTR Input & Screenshot Upload */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      12-Digit UTR / Transaction ID <span className="text-red-400">*</span>
                     </label>
-                  )}
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Uploaded directly to your Google Drive.
-                  </span>
+                    <input
+                      type="text"
+                      required
+                      maxLength={16}
+                      value={formData.utrNumber}
+                      onChange={(e) => setFormData({ ...formData, utrNumber: e.target.value })}
+                      placeholder="e.g. 377898096414"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#060a18] border border-slate-700 focus:border-[#00f2fe] text-white text-sm font-mono focus:outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Payment Screenshot <span className="text-red-400">*</span>
+                    </label>
+                    {previewUrl ? (
+                      <div className="relative inline-flex items-center gap-2 p-2 rounded-xl bg-white/5 border border-[#00f2fe]/40">
+                        <img src={previewUrl} alt="Preview" className="w-12 h-12 object-cover rounded-lg" />
+                        <span className="text-xs text-emerald-300 font-mono">Receipt Attached</span>
+                        <button
+                          type="button"
+                          onClick={removeScreenshot}
+                          className="p-1 rounded-full bg-red-500/20 text-red-300 hover:bg-red-500/40 ml-2"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[#00f2fe]/40 hover:border-[#00f2fe] bg-white/[0.02] text-xs text-slate-300 hover:text-white transition font-mono">
+                        <Upload className="w-4 h-4 text-[#00f2fe]" />
+                        <span>Upload Screenshot (JPG/PNG)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleFileChange}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
+
               </div>
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-full bg-[#00f2fe] text-black font-extrabold text-sm uppercase tracking-wider hover:bg-cyan-300 transition flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(0,242,254,0.35)] disabled:opacity-50 font-mono"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-black" />
-                  <span>AI VERIFYING RECEIPT, AMOUNT &amp; UTR...</span>
-                </>
-              ) : (
-                <span>SUBMIT OFFICIAL REGISTRATION</span>
-              )}
-            </button>
-          </form>
+            <div className="pt-4 text-center">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-black font-extrabold text-sm uppercase tracking-wider hover:brightness-110 disabled:opacity-50 transition shadow-[0_0_30px_rgba(0,242,254,0.4)] font-mono"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying Payment with AI...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Verify Payment &amp; Submit Registration</span>
+                  </>
+                )}
+              </button>
+            </div>
 
+          </form>
         </div>
       </div>
     </section>
   );
 };
+export default RegistrationSection;

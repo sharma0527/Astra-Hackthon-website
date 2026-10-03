@@ -5,6 +5,13 @@ import { paymentConfig } from './data/eventConfig';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'track'>('home');
+  const [isRegistered, setIsRegistered] = useState<boolean>(() => {
+    try {
+      return Boolean(localStorage.getItem('astra_completed_registration'));
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     document.title = "Astra hackthon 2026";
@@ -19,9 +26,26 @@ export function App() {
       }
     };
 
+    const checkRegistrationStatus = () => {
+      try {
+        setIsRegistered(Boolean(localStorage.getItem('astra_completed_registration')));
+      } catch {
+        setIsRegistered(false);
+      }
+    };
+
     syncRouteFromLocation();
+    checkRegistrationStatus();
+
     window.addEventListener('popstate', syncRouteFromLocation);
-    return () => window.removeEventListener('popstate', syncRouteFromLocation);
+    window.addEventListener('storage', checkRegistrationStatus);
+    window.addEventListener('registrationChange', checkRegistrationStatus);
+
+    return () => {
+      window.removeEventListener('popstate', syncRouteFromLocation);
+      window.removeEventListener('storage', checkRegistrationStatus);
+      window.removeEventListener('registrationChange', checkRegistrationStatus);
+    };
   }, []);
 
   const navigateToTrack = () => {
@@ -136,7 +160,7 @@ export function App() {
               }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]/60"></span>
-              Register
+              {isRegistered ? 'Final Round' : 'Register Now'}
             </a>
             <a
               className="hover:text-[#00f2fe] transition-colors flex items-center gap-1.5 py-1"
@@ -169,7 +193,7 @@ export function App() {
                 navigateToHome('register');
               }}
             >
-              <span>Register Now</span>
+              <span>{isRegistered ? 'Final Round' : 'Register Now'}</span>
               <span className="material-symbols-outlined text-[16px] font-bold">bolt</span>
             </a>
           </div>
@@ -216,7 +240,7 @@ export function App() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-xl mb-10 text-xs sm:text-sm">
                   <div className="cyber-glass-card hud-brackets flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl cursor-default transition-all duration-300 hover:scale-105">
                     <span className="material-symbols-outlined text-[#00f2fe] text-xl drop-shadow-[0_0_8px_#00f2fe]">calendar_month</span>
-                    <span className="font-bold text-white tracking-wide">21-09-2026</span>
+                    <span className="font-bold text-white tracking-wide">10-10-2026</span>
                   </div>
                   <div className="cyber-glass-card hud-brackets flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl cursor-default transition-all duration-300 hover:scale-105">
                     <span className="material-symbols-outlined text-[#d1bcff] text-xl drop-shadow-[0_0_8px_#d1bcff]">location_on</span>
@@ -230,8 +254,8 @@ export function App() {
                     className="cyber-button-primary group inline-flex items-center gap-3 px-9 py-4 rounded-full text-black text-sm sm:text-base font-extrabold uppercase tracking-wider shadow-[0_0_25px_rgba(0,242,254,0.45)]"
                     href="#register"
                   >
-                    <span>Go to Registration</span>
-                    <span className="material-symbols-outlined text-xl group-hover:translate-y-1 transition-transform">arrow_downward</span>
+                    <span>{isRegistered ? 'Final Round' : 'Register Now'}</span>
+                    <span className="material-symbols-outlined text-xl group-hover:translate-y-1 transition-transform">bolt</span>
                   </a>
                 </div>
               </div>

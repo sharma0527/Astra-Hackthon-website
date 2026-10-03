@@ -450,12 +450,16 @@ export const eventConfig = {
   ] as FaqItem[]
 };
 
+const upiPaymentUri = "upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon";
+
 export const paymentConfig = {
   feeAmount: 999,
+  registrationFee: 999,
   feeCurrency: "INR",
   formattedFee: "₹999",
   friendUpiId: "sivakottamachalla@ybl",
   friendName: "sivakottamachalla",
   googleFormUrl: "https://forms.gle/xhjE57wm7rUJ2HWH9",
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec"
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec",
+  friendUpiQrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiPaymentUri)}`
 };

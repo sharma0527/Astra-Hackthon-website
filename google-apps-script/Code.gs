@@ -190,9 +190,10 @@ function CHECK_CONNECTED_SHEETS() {
 
 function CHECK_REGISTRATION_SHEET_CONNECTION() {
   Logger.log('====================================================');
-  Logger.log('🔍 ASTRA 2026 - REGISTRATION SHEET CONNECTION TEST');
+  Logger.log('🔍 ASTRA 2026 - FULL SYSTEM & REGISTRATION DIAGNOSTIC');
   Logger.log('====================================================');
   
+  // 1. Spreadsheet Connection
   const ss = SpreadsheetApp.openById(ASTRA.SPREADSHEET_ID);
   Logger.log('✅ SPREADSHEET OPENED: ' + ss.getName() + ' (ID: ' + ss.getId() + ')');
   
@@ -238,12 +239,58 @@ function CHECK_REGISTRATION_SHEET_CONNECTION() {
     Logger.log('ℹ️ No existing tab found yet. Next submission will automatically create "Form Responses 1" tab.');
   }
 
+  // 2. Google Drive Storage Connection
+  Logger.log('----------------------------------------------------');
+  try {
+    let driveFolder;
+    if (PAYMENT_CONFIG.SCREENSHOT_FOLDER_ID) {
+      driveFolder = DriveApp.getFolderById(PAYMENT_CONFIG.SCREENSHOT_FOLDER_ID);
+      Logger.log('✅ Screenshot Drive Folder: "' + driveFolder.getName() + '"');
+    } else {
+      driveFolder = DriveApp.getRootFolder();
+      Logger.log('✅ Screenshot Storage: Root Drive Folder ("' + driveFolder.getName() + '")');
+    }
+  } catch (driveErr) {
+    Logger.log('⚠️ Drive Folder Access Notice: ' + driveErr.message);
+  }
+
+  // 3. Payment & Gemini AI Status
   Logger.log('----------------------------------------------------');
   Logger.log('🤖 Payment & AI Anti-Scam Config:');
   Logger.log('   Expected Fee: ₹' + PAYMENT_CONFIG.EXPECTED_AMOUNT);
   Logger.log('   Recipient Name: ' + PAYMENT_CONFIG.RECIPIENT_NAME);
   Logger.log('   Recipient UPI: ' + PAYMENT_CONFIG.RECIPIENT_UPI);
-  Logger.log('   Gemini API Key: ' + (PAYMENT_CONFIG.GEMINI_API_KEY ? 'Active & Configured' : 'MISSING'));
+  
+  const apiKeys = getGeminiApiKeys_();
+  if (apiKeys.length > 0) {
+    Logger.log('   🔑 Configured Gemini API Keys: ' + apiKeys.length + ' key(s) detected');
+    apiKeys.forEach(function(k, idx) {
+      const role = (idx === 0) ? 'Primary' : 'Backup #' + idx;
+      const masked = k.slice(0, 6) + '...' + k.slice(-6);
+      try {
+        const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash?key=' + k;
+        const res = UrlFetchApp.fetch(testUrl, { muteHttpExceptions: true });
+        const code = res.getResponseCode();
+        if (code === 200) {
+          Logger.log('   ✅ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): 100% OPERATIONAL (gemini-3.8-flash)');
+        } else if (code === 429) {
+          Logger.log('   ⚠️ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): QUOTA EXCEEDED (Auto-failover will engage)');
+        } else if (code === 403) {
+          Logger.log('   ❌ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): PERMISSION DENIED (Google Cloud Project has denied access. Create a fresh key at aistudio.google.com/app/apikey)');
+        } else {
+          Logger.log('   ❌ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): HTTP ' + code + ' - ' + res.getContentText().slice(0, 100));
+        }
+      } catch (e) {
+        Logger.log('   ❌ Key #' + (idx + 1) + ' Fetch Error: ' + e.message);
+      }
+    });
+    if (apiKeys.length >= 2) {
+      Logger.log('   🛡️ Automatic Multi-Key Failover: READY & ACTIVE');
+    }
+  } else {
+    Logger.log('   ⚠️ Gemini API Keys: MISSING in Script Properties!');
+    Logger.log('   👉 Run SETUP_GEMINI_API_KEYS("KEY_1", "KEY_2") or add GEMINI_API_KEY in Project Settings ⚙️ ➔ Script Properties');
+  }
   Logger.log('====================================================');
 }
 
@@ -1164,12 +1211,288 @@ function buildVerificationUrl_() {
   return getVerificationBaseUrl_();
 }
 
+function maskEmail_(email) {
+  if (!email || typeof email !== 'string') return 'N/A';
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const name = parts[0];
+  const domain = parts[1];
+  if (name.length <= 2) return name[0] + '***@' + domain;
+  return name.slice(0, 2) + '***' + name.slice(-1) + '@' + domain;
+}
+
+function formatDateSafe_(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, 'Asia/Kolkata', 'yyyy-MM-dd');
+  }
+  return String(val);
+}
+
+/**
+ * WEBSITE APPLICATION STATUS TRACKING API HANDLER
+ * Supports querying by:
+ * - Application ID: ASTRA-2026-TEAM001, ASTRA-2026-TEAM1000, UUID, etc.
+ * - Team ID: ASTRA-TEAM-001, ASTRA-TEAM-1000, etc.
+ * - Number: 1, 100, 1000 (all are valid)
+ * - Team Leader Email
+ */
+function handleApplicationTrackingQuery_(queryId) {
+  const cleanId = cleanText_(queryId).toUpperCase();
+  if (!cleanId) {
+    return sendJsonResponse_({
+      success: false,
+      message: 'Application ID is required.'
+    });
+  }
+
+  // Normalize numbers like "1000", "001" to match both raw and formatted IDs
+  let numSeq = '';
+  if (/^\d+$/.test(cleanId)) {
+    const n = parseInt(cleanId, 10);
+    numSeq = n >= 1000 ? String(n) : ('000' + n).slice(-3);
+  } else if (/^(?:TEAM-?|ASTRA-TEAM-?)(\d+)$/i.test(cleanId)) {
+    const match = cleanId.match(/^(?:TEAM-?|ASTRA-TEAM-?)(\d+)$/i);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      numSeq = n >= 1000 ? String(n) : ('000' + n).slice(-3);
+    }
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(ASTRA.SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('Form Responses 1') || 
+              ss.getSheetByName('Form Responses 2') || 
+              ss.getSheetByName('REGISTRATIONS') || 
+              ss.getSheets()[0];
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    return sendJsonResponse_({
+      success: false,
+      errorCode: 'NOT_FOUND',
+      message: 'Application not found. Please check your Application ID and try again.'
+    });
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const rawHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const headers = rawHeaders.map(h => cleanText_(h).toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+  function col(keywords) {
+    for (let i = 0; i < headers.length; i++) {
+      for (let k of keywords) {
+        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (headers[i] === nk || headers[i].indexOf(nk) >= 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  const appIdIdx = col(['applicationid', 'appid', 'registrationid']);
+  const teamIdIdx = col(['teamid', 'teamidentification']);
+  const statusIdx = col(['status', 'applicationstatus']);
+  const updatedIdx = col(['lastupdated', 'updatedat']);
+  const notesIdx = col(['reviewnotes', 'notes', 'remarks']);
+  const teamNameIdx = col(['teamname', 'nameofteam']);
+  const leadNameIdx = col(['teamleadname', 'leadname']);
+  const leadEmailIdx = col(['teamleademail', 'emailaddress', 'leademail', 'email']);
+  const leadBranchIdx = col(['teamleadbranch', 'leadbranch', 'branch']);
+
+  // Member names
+  const m2NameIdx = col(['member2name', 'teammember2name']);
+  const m3NameIdx = col(['member3name', 'teammember3name']);
+  const m4NameIdx = col(['member4name', 'teammember4name']);
+  const m5NameIdx = col(['member5name', 'teammember5name']);
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const rowAppId = appIdIdx >= 0 ? cleanText_(r[appIdIdx]).toUpperCase() : '';
+    const rowTeamId = teamIdIdx >= 0 ? cleanText_(r[teamIdIdx]).toUpperCase() : '';
+    const rowLeadEmail = leadEmailIdx >= 0 ? normalizeEmail_(r[leadEmailIdx]) : '';
+    const rowSeq = String(i + 1);
+    const rowPaddedSeq = (i + 1) >= 1000 ? String(i + 1) : ('000' + (i + 1)).slice(-3);
+
+    // Matching condition
+    const isMatch = (rowAppId && rowAppId === cleanId) ||
+                    (rowTeamId && rowTeamId === cleanId) ||
+                    (numSeq && (rowAppId.indexOf(numSeq) >= 0 || rowTeamId.indexOf(numSeq) >= 0 || rowPaddedSeq === numSeq)) ||
+                    (cleanId === rowSeq || cleanId === rowPaddedSeq) ||
+                    (cleanId.indexOf('@') >= 0 && rowLeadEmail === normalizeEmail_(cleanId));
+
+    if (isMatch) {
+      const teamName = teamNameIdx >= 0 ? cleanText_(r[teamNameIdx]) : '';
+      const leadName = leadNameIdx >= 0 ? cleanText_(r[leadNameIdx]) : '';
+      const leadBranch = leadBranchIdx >= 0 ? cleanText_(r[leadBranchIdx]) : '';
+      const status = statusIdx >= 0 ? cleanText_(r[statusIdx]) : 'SUBMITTED';
+      const updated = updatedIdx >= 0 && r[updatedIdx] ? formatDateSafe_(r[updatedIdx]) : '';
+      const notes = notesIdx >= 0 ? cleanText_(r[notesIdx]) : '';
+
+      const members = [];
+      if (leadName) members.push({ name: leadName, role: 'Team Lead' });
+      if (m2NameIdx >= 0 && cleanText_(r[m2NameIdx])) members.push({ name: cleanText_(r[m2NameIdx]), role: 'Team Member 1' });
+      if (m3NameIdx >= 0 && cleanText_(r[m3NameIdx])) members.push({ name: cleanText_(r[m3NameIdx]), role: 'Team Member 2' });
+      if (m4NameIdx >= 0 && cleanText_(r[m4NameIdx])) members.push({ name: cleanText_(r[m4NameIdx]), role: 'Team Member 3' });
+      if (m5NameIdx >= 0 && cleanText_(r[m5NameIdx])) members.push({ name: cleanText_(r[m5NameIdx]), role: 'Team Member 4' });
+
+      return sendJsonResponse_({
+        success: true,
+        application: {
+          applicationId: rowAppId || ('ASTRA-2026-TEAM' + rowPaddedSeq),
+          teamId: rowTeamId || ('ASTRA-TEAM-' + rowPaddedSeq),
+          teamName: teamName || ('Team ' + (rowTeamId || rowPaddedSeq)),
+          teamLead: leadName || 'Team Lead',
+          email: maskEmail_(rowLeadEmail),
+          maskedEmail: maskEmail_(rowLeadEmail),
+          branch: leadBranch || 'N/A',
+          problemStatement: 'Open Innovation / Domain Tracks',
+          domain: 'Open Innovation',
+          track: 'Open Innovation',
+          college: 'NRI Institute of Technology',
+          members: members.length > 0 ? members : [{ name: leadName || 'Team Lead', role: 'Team Lead' }],
+          memberCount: members.length || 1,
+          status: (status && status !== 'ERROR') ? status.toUpperCase() : 'SUBMITTED',
+          lastUpdated: updated || Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd'),
+          reviewNotes: notes || 'Application received successfully.'
+        }
+      });
+    }
+  }
+
+  return sendJsonResponse_({
+    success: false,
+    errorCode: 'NOT_FOUND',
+    message: 'Application not found. Please check your Application ID and try again.'
+  });
+}
+
+/**
+ * AUTO-ORGANIZER FOR REGISTRATIONS
+ * 1. Checks every row for missing Team ID, Application ID, or Status.
+ * 2. Assigns sequential Team ID (ASTRA-TEAM-001 up to ASTRA-TEAM-1000+)
+ *    and Application ID (ASTRA-2026-TEAM001 up to ASTRA-2026-TEAM1000+).
+ * 3. Never throws false ERROR if team name is blank (uses smart fallback).
+ */
+function organizeRegistrations() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.openById(ASTRA.SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('Form Responses 1') || 
+              ss.getSheetByName('Form Responses 2') || 
+              ss.getSheetByName('REGISTRATIONS') || 
+              ss.getSheets()[0];
+  
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return;
+
+  const rawHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+  const normHeaders = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+  function findColIndex(candidates) {
+    for (let i = 0; i < normHeaders.length; i++) {
+      for (let c of candidates) {
+        const nc = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normHeaders[i] === nc || normHeaders[i].indexOf(nc) >= 0) {
+          return i + 1; // 1-based
+        }
+      }
+    }
+    return -1;
+  }
+
+  // Ensure tracking columns exist at end if not found
+  const needed = [
+    { name: 'Team ID', candidates: ['teamid', 'teamidentification'] },
+    { name: 'Application ID', candidates: ['applicationid', 'appid', 'registrationid'] },
+    { name: 'Status', candidates: ['status', 'appstatus', 'applicationstatus'] },
+    { name: 'Last Updated', candidates: ['lastupdated', 'updatedat', 'timestampupdated'] },
+    { name: 'Review Notes', candidates: ['reviewnotes', 'notes', 'remarks'] }
+  ];
+
+  needed.forEach(item => {
+    let col = findColIndex(item.candidates);
+    if (col === -1) {
+      col = sheet.getLastColumn() + 1;
+      sheet.getRange(1, col).setValue(item.name).setFontWeight('bold');
+      rawHeaders.push(item.name);
+      normHeaders.push(item.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    }
+  });
+
+  const teamIdCol = findColIndex(['teamid']);
+  const appIdCol = findColIndex(['applicationid', 'appid']);
+  const statusCol = findColIndex(['status']);
+  const updatedCol = findColIndex(['lastupdated']);
+  const notesCol = findColIndex(['reviewnotes']);
+  const teamNameCol = findColIndex(['teamname', 'nameofteam']);
+
+  const totalCols = sheet.getLastColumn();
+  const rows = sheet.getRange(2, 1, lastRow - 1, totalCols).getValues();
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowNum = i + 2;
+    const teamName = teamNameCol > 0 ? String(rows[i][teamNameCol - 1] || '').trim() : '';
+    let currentTeamId = teamIdCol > 0 ? String(rows[i][teamIdCol - 1] || '').trim() : '';
+    let currentAppId = appIdCol > 0 ? String(rows[i][appIdCol - 1] || '').trim() : '';
+    let currentStatus = statusCol > 0 ? String(rows[i][statusCol - 1] || '').trim() : '';
+
+    // Generate for missing, unassigned, or previously errored rows
+    if (!currentTeamId || !currentAppId || currentStatus === 'ERROR' || currentStatus === '') {
+      const seqNum = i + 1;
+      // Supports 1000 and beyond seamlessly: 001..999, 1000, 1001...
+      const seqStr = seqNum >= 1000 ? String(seqNum) : ('000' + seqNum).slice(-3);
+      const newTeamId = 'ASTRA-TEAM-' + seqStr;
+      const newAppId = 'ASTRA-2026-TEAM' + seqStr;
+
+      sheet.getRange(rowNum, teamIdCol).setValue(newTeamId);
+      sheet.getRange(rowNum, appIdCol).setValue(newAppId);
+      sheet.getRange(rowNum, statusCol).setValue('SUBMITTED');
+      sheet.getRange(rowNum, updatedCol).setValue(new Date());
+
+      const notes = teamName ? 'Application registered successfully.' : 'Application registered (Team Name defaulted).';
+      sheet.getRange(rowNum, notesCol).setValue(notes);
+    }
+  }
+}
+
 /* ============================================================
    PROTECTED PUBLIC QR & VERIFICATION PORTAL HANDLER
    ============================================================ */
 
 function doGet(e) {
   const params = e && e.parameter ? e.parameter : {};
+
+  // Ping / Healthcheck
+  if (params.action === 'ping' || params.ping === '1') {
+    return sendJsonResponse_({
+      status: 'ok',
+      version: ASTRA.CERTIFICATE_TEMPLATE_VERSION,
+      time: new Date().toISOString(),
+      message: 'ASTRA 2026 Unified Engine & Verification Portal Online'
+    });
+  }
+
+  // Dual Gemini API Key Quota & Status API (?action=check_keys OR ?action=quota)
+  if (params.action === 'check_keys' || params.action === 'quota') {
+    const report = CHECK_GEMINI_API_KEYS_QUOTA();
+    return sendJsonResponse_({ status: 'success', data: report });
+  }
+
+  // Certificate Preview JSON API (?action=preview&email=...&teamId=...)
+  if (params.action === 'preview') {
+    try {
+      const preview = getCertificatePreviewFromResponse(params.email, params.teamId || params.certId || params.certificateId);
+      return sendJsonResponse_({ status: 'success', data: preview });
+    } catch (err) {
+      return sendJsonResponse_({ status: 'error', message: err.message });
+    }
+  }
+
+  // 0. WEBSITE APPLICATION STATUS TRACKING ROUTE (?applicationId=... or ?id=...)
+  const trackId = cleanText_(params.applicationId || params.id || params.teamId || params.search || params.trackId || '');
+  if ((params.action === 'track' || trackId) && !params.email && !params.auth && !params.submit) {
+    return handleApplicationTrackingQuery_(trackId);
+  }
 
   // 1. ORGANIZER CONTROL PANEL ROUTE (?admin=astra2026 OR ?admin=1)
   const isAdminReq = Boolean(params.admin === ASTRA.ADMIN_KEY || params.admin === '1' || params.panel === '1' || params.panel === ASTRA.ADMIN_KEY);
@@ -2269,13 +2592,31 @@ const PAYMENT_CONFIG = {
 };
 
 /**
- * Retrieve Gemini API key securely from Google Apps Script 'Script Properties'
- * (Project Settings ⚙️ ➔ Script Properties ➔ GEMINI_API_KEY)
+ * Retrieves all configured Gemini API keys (Primary, Backup, or comma-separated).
+ * Automatically reads GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_BACKUP.
  */
-function getGeminiApiKey_() {
+function getGeminiApiKeys_() {
   const scriptProps = PropertiesService.getScriptProperties();
-  const key = scriptProps.getProperty('GEMINI_API_KEY');
-  return (key && key.trim().length > 10) ? key.trim() : '';
+  const raw1 = scriptProps.getProperty('GEMINI_API_KEY') || '';
+  const raw2 = scriptProps.getProperty('GEMINI_API_KEY_2') || scriptProps.getProperty('GEMINI_API_KEY_BACKUP') || '';
+
+  const keys = [];
+  function addKey(k) {
+    const clean = String(k || '').trim();
+    if (clean.length > 10 && clean.indexOf('PASTE_') < 0 && keys.indexOf(clean) < 0) {
+      keys.push(clean);
+    }
+  }
+
+  raw1.split(',').forEach(addKey);
+  raw2.split(',').forEach(addKey);
+
+  return keys;
+}
+
+function getGeminiApiKey_() {
+  const keys = getGeminiApiKeys_();
+  return keys.length > 0 ? keys[0] : '';
 }
 
 function doPost(e) {
@@ -2290,12 +2631,25 @@ function doPost(e) {
   }
 
   try {
-    const rawContent = e && e.postData ? e.postData.contents : null;
+    let rawContent = e && e.postData ? e.postData.contents : null;
+    if (!rawContent && e && e.parameter && Object.keys(e.parameter).length > 0) {
+      rawContent = JSON.stringify(e.parameter);
+    }
     if (!rawContent) {
       return sendJsonResponse_({ status: 'error', message: 'No submission data received.' });
     }
 
-    const data = JSON.parse(rawContent);
+    let data;
+    try {
+      data = JSON.parse(rawContent);
+    } catch (parseErr) {
+      return sendJsonResponse_({ status: 'error', message: 'Malformed JSON payload: ' + parseErr.message });
+    }
+
+    // Support tracking queries sent via POST
+    if (data.action === 'track' && (data.applicationId || data.teamId)) {
+      return handleApplicationTrackingQuery_(data.applicationId || data.teamId);
+    }
 
     // 1. Normalize Details
     const teamName = cleanText_(data.teamName);
@@ -2524,22 +2878,24 @@ function doPost(e) {
  * ULTRA-STRICT ZERO-TOLERANCE PAYMENT INSPECTOR
  */
 function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
-  // 1. Fetch API key from Script Properties (Project Settings ⚙️ ➔ Script Properties ➔ GEMINI_API_KEY)
-  const apiKey = getGeminiApiKey_();
-  if (!apiKey) {
+  // 1. Fetch all configured API keys (Primary and Backup)
+  const apiKeys = getGeminiApiKeys_();
+  if (!apiKeys || apiKeys.length === 0) {
     return {
       isLegit: false,
-      rejectionReason: "Configuration Error: GEMINI_API_KEY is not set in Script Properties. Please add it under Apps Script Project Settings (gear icon) ➔ Script Properties."
+      rejectionReason: "Configuration Error: No Gemini API keys found in Script Properties. Please add GEMINI_API_KEY and GEMINI_API_KEY_2 under Project Settings (gear icon) ➔ Script Properties."
     };
   }
 
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
   const candidateModels = [
-    "gemini-flash-lite-latest",
+    "gemini-3.8-flash",
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
     "gemini-3.1-flash-lite",
-    "gemini-3.8-flash"
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-3.7-flash",
+    "gemini-pro-latest"
   ];
 
   const promptText = 
@@ -2549,7 +2905,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
     "1. IMAGE TYPE: The image MUST be an authentic screenshot of a successful Indian UPI payment app (Google Pay, PhonePe, Paytm, BHIM, CRED, AmazonPay, or Bank App).\n" +
     "   CRITICAL: If the image is a photo of cooking pots, kitchen utensils, food, selfie, meme, document, random object, or anything other than a genuine UPI transaction screen, YOU MUST SET isAuthenticUPI to false.\n" +
     "2. RECIPIENT MATCH: The payment recipient in the screenshot MUST be paid to: \"" + PAYMENT_CONFIG.RECIPIENT_NAME + "\", \"Siva Kotamma Challa\", or UPI ID containing \"" + PAYMENT_CONFIG.RECIPIENT_UPI + "\". If paid to anyone else or a store, recipientMatches MUST be false.\n" +
-    "3. EXACT AMOUNT: The amount transferred MUST be AT LEAST " + PAYMENT_CONFIG.EXPECTED_AMOUNT + " INR (₹999).\n" +
+    "3. EXACT AMOUNT: The amount transferred MUST be AT LEAST ₹999 or ₹1000 (both ₹999 and ₹1000 are valid registration fees).\n" +
     "4. UTR EXTRACTION: Find the 12-digit UPI Reference Number / UTR in the screenshot. Does it contain or match the user entered UTR: \"" + userEnteredUtr + "\"?\n\n" +
     "Respond ONLY in strict JSON format without markdown:\n" +
     "{\n" +
@@ -2577,36 +2933,59 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
   };
 
   let parsedResult = null;
+  let keySuccessInfo = '';
 
-  for (let i = 0; i < candidateModels.length; i++) {
-    const model = candidateModels[i];
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
-    try {
-      const res = UrlFetchApp.fetch(url, {
-        method: "post",
-        contentType: "application/json",
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      });
+  // Dual-Key Failover Engine: Loop through available API keys (Primary -> Backup)
+  for (let k = 0; k < apiKeys.length; k++) {
+    const apiKey = apiKeys[k];
+    const keyLabel = "API Key #" + (k + 1) + " (..." + apiKey.slice(-6) + ")";
+    let keyHitQuota = false;
 
-      const responseCode = res.getResponseCode();
-      if (responseCode !== 200) {
-        Logger.log("Model " + model + " returned HTTP " + responseCode + ": " + res.getContentText());
-        continue;
-      }
+    for (let i = 0; i < candidateModels.length; i++) {
+      const model = candidateModels[i];
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
 
-      const resJson = JSON.parse(res.getContentText());
-      if (resJson.candidates && resJson.candidates[0] && resJson.candidates[0].content && resJson.candidates[0].content.parts) {
-        const rawText = resJson.candidates[0].content.parts[0].text || "";
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          parsedResult = JSON.parse(jsonMatch[0]);
-          Logger.log("Successfully verified with model: " + model);
-          break;
+      try {
+        const res = UrlFetchApp.fetch(url, {
+          method: "post",
+          contentType: "application/json",
+          payload: JSON.stringify(payload),
+          muteHttpExceptions: true
+        });
+
+        const responseCode = res.getResponseCode();
+        const contentText = res.getContentText();
+
+        if (responseCode === 200) {
+          const resJson = JSON.parse(contentText);
+          if (resJson.candidates && resJson.candidates[0] && resJson.candidates[0].content && resJson.candidates[0].content.parts) {
+            const rawText = resJson.candidates[0].content.parts[0].text || "";
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              parsedResult = JSON.parse(jsonMatch[0]);
+              keySuccessInfo = keyLabel + " [model: " + model + "]";
+              Logger.log("✅ Verified successfully with " + keySuccessInfo);
+              break;
+            }
+          }
+        } else if (responseCode === 429 || contentText.indexOf('RESOURCE_EXHAUSTED') >= 0 || contentText.indexOf('quota') >= 0) {
+          Logger.log("⚠️ " + keyLabel + " QUOTA EXCEEDED (HTTP " + responseCode + "). Failover immediately to next available key...");
+          keyHitQuota = true;
+          break; // Stop querying models with this exhausted key, switch to next key!
+        } else {
+          Logger.log("Model " + model + " with " + keyLabel + " returned HTTP " + responseCode + ": " + contentText.slice(0, 100));
         }
+      } catch (e) {
+        Logger.log("Error querying model " + model + " with " + keyLabel + ": " + e);
       }
-    } catch (e) {
-      Logger.log("Error querying model " + model + ": " + e);
+    }
+
+    if (parsedResult) {
+      break; // Verification success!
+    }
+
+    if (keyHitQuota && (k + 1) < apiKeys.length) {
+      Logger.log("🔄 FAILOVER ENGAGED: Switching automatically to Key #" + (k + 2) + "...");
     }
   }
 
@@ -2641,13 +3020,13 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
     };
   }
 
-  // Check 3: Is the amount correct?
+  // Check 3: Is the amount correct? (₹999, ₹1000, or above are all valid)
   const amountVal = Number(parsedResult.extractedAmount) || 0;
-  const isAmountOk = parsedResult.amountMatches || amountVal >= PAYMENT_CONFIG.EXPECTED_AMOUNT;
+  const isAmountOk = parsedResult.amountMatches || amountVal >= 999 || amountVal >= 1000;
   if (!isAmountOk) {
     return {
       isLegit: false,
-      rejectionReason: "Incorrect Amount: Registration requires ₹" + PAYMENT_CONFIG.EXPECTED_AMOUNT + ", but this screenshot shows ₹" + amountVal + "."
+      rejectionReason: "Incorrect Amount: Registration requires ₹999 or ₹1000, but this screenshot shows ₹" + amountVal + "."
     };
   }
 
@@ -2678,67 +3057,190 @@ function sendJsonResponse_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+
+
 /**
- * ONE-CLICK DIAGNOSTIC & PERMISSION AUTHORIZATION TOOL
- * Select this function in the top bar of Apps Script and click 'Run'.
- * This will prompt the Google Authorization dialog (Review permissions -> Allow)
- * and test the Sheet, Drive, and AI connections.
+ * ============================================================
+ * DUAL GEMINI API KEYS STATUS & QUOTA INSPECTOR
+ * Run this function from the dropdown to check BOTH keys at the same time.
+ * ============================================================
  */
-function CHECK_REGISTRATION_SHEET_CONNECTION() {
-  Logger.log("--- STARTING REGISTRATION SYSTEM DIAGNOSTICS ---");
-  
-  // 1. Check Spreadsheet Access
-  try {
-    const ss = SpreadsheetApp.openById(ASTRA.SPREADSHEET_ID);
-    Logger.log("✅ Spreadsheet opened successfully: " + ss.getName());
-    let sheet = ss.getSheetByName('Form Responses 1') || ss.getSheets()[0];
-    Logger.log("✅ Target Sheet found: '" + sheet.getName() + "' with " + sheet.getLastRow() + " rows and " + sheet.getLastColumn() + " columns.");
-  } catch (err) {
-    Logger.log("❌ Spreadsheet Error: " + err);
+function CHECK_GEMINI_API_KEYS_QUOTA() {
+  Logger.log("====================================================");
+  Logger.log("🔑 ASTRA 2026 - DUAL GEMINI API KEYS STATUS & QUOTA CHECK");
+  Logger.log("====================================================");
+
+  const keys = getGeminiApiKeys_();
+  if (keys.length === 0) {
+    Logger.log("❌ No Gemini API keys found in Script Properties!");
+    Logger.log("👉 Please run SETUP_GEMINI_API_KEYS('KEY1', 'KEY2') or configure GEMINI_API_KEY and GEMINI_API_KEY_2 in Project Settings ⚙️.");
+    return { success: false, message: "No API keys configured" };
   }
 
-  // 2. Check Drive Access
-  try {
-    const root = DriveApp.getRootFolder();
-    Logger.log("✅ Google Drive access confirmed: Root folder = " + root.getName());
-  } catch (err) {
-    Logger.log("❌ Drive Error: " + err);
-  }
+  Logger.log("🔍 Total Configured Keys: " + keys.length);
+  const results = [];
 
-  // 3. Check Gemini API Connection from Script Properties
-  const apiKey = getGeminiApiKey_();
-  if (!apiKey) {
-    Logger.log("⚠️ GEMINI_API_KEY is NOT set in Script Properties yet!");
-    Logger.log("👉 Go to Project Settings (gear ⚙️ icon on left) ➔ Script Properties ➔ Add 'GEMINI_API_KEY'.");
-  } else {
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const role = (i === 0) ? "PRIMARY (Key 1)" : (i === 1) ? "BACKUP (Key 2)" : ("EXTRA (Key " + (i + 1) + ")");
+    const masked = key.slice(0, 6) + "..." + key.slice(-6);
+
+    Logger.log("----------------------------------------------------");
+    Logger.log("📌 Testing " + role + ": " + masked);
+
+    const startTime = new Date().getTime();
     try {
-      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest?key=" + apiKey;
-      const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-      const code = res.getResponseCode();
-      Logger.log("✅ Gemini AI API HTTP Status: " + code);
-      if (code === 200) {
-        Logger.log("✅ Gemini API Key is working perfectly!");
-      } else {
-        Logger.log("❌ Gemini API Key Error: " + res.getContentText());
+      const probeModels = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"];
+      let probeSuccess = false;
+      let lastCode = 0;
+      let lastBody = "";
+      let workingModel = "";
+
+      for (let m = 0; m < probeModels.length; m++) {
+        const testModel = probeModels[m];
+        const pingUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + testModel + ":generateContent?key=" + key;
+        const pingPayload = {
+          contents: [{ parts: [{ text: "ping" }] }],
+          generationConfig: { maxOutputTokens: 5, temperature: 0.0 }
+        };
+
+        const res = UrlFetchApp.fetch(pingUrl, {
+          method: "post",
+          contentType: "application/json",
+          payload: JSON.stringify(pingPayload),
+          muteHttpExceptions: true
+        });
+
+        lastCode = res.getResponseCode();
+        lastBody = res.getContentText();
+
+        if (lastCode === 200) {
+          probeSuccess = true;
+          workingModel = testModel;
+          break;
+        } else if (lastCode === 403 || lastCode === 429) {
+          // If project denied access or quota reached, trying other models won't change project permission
+          break;
+        }
       }
-    } catch (err) {
-      Logger.log("❌ Gemini API Fetch Error: " + err);
+
+      const elapsed = (new Date().getTime() - startTime) + "ms";
+
+      if (probeSuccess) {
+        Logger.log("   ✅ Status: ACTIVE & HEALTHY (HTTP 200 in " + elapsed + " via " + workingModel + ")");
+        Logger.log("   ⚡ Quota Availability: 100% OPERATIONAL (Ready for verifications)");
+        results.push({
+          index: i + 1,
+          role: role,
+          maskedKey: masked,
+          status: "ACTIVE",
+          httpCode: 200,
+          latency: elapsed,
+          model: workingModel,
+          message: "Key is fully operational and quota is available."
+        });
+      } else if (lastCode === 429) {
+        Logger.log("   ⚠️ Status: QUOTA EXCEEDED / RATE LIMITED (HTTP 429 in " + elapsed + ")");
+        Logger.log("   🔄 Auto-Failover: Script will automatically switch to Key #" + (i + 2) + "!");
+        results.push({
+          index: i + 1,
+          role: role,
+          maskedKey: masked,
+          status: "QUOTA_EXCEEDED",
+          httpCode: 429,
+          latency: elapsed,
+          message: "Quota or rate limit reached. Auto-failover will engage."
+        });
+      } else if (lastCode === 403) {
+        Logger.log("   ❌ Status: PERMISSION DENIED (HTTP 403 in " + elapsed + ")");
+        Logger.log("   ⚠️ REASON: Google says 'Your project has been denied access'.");
+        Logger.log("   👉 FIX: The Google Cloud project linked to this key has restricted Generative Language access.");
+        Logger.log("      Please create a fresh key at: https://aistudio.google.com/app/apikey (keys starting with AIzaSy...)");
+        results.push({
+          index: i + 1,
+          role: role,
+          maskedKey: masked,
+          status: "PERMISSION_DENIED",
+          httpCode: 403,
+          latency: elapsed,
+          message: "Project denied access. Please create a key from https://aistudio.google.com/app/apikey"
+        });
+      } else {
+        Logger.log("   ❌ Status: ERROR (HTTP " + lastCode + "): " + lastBody.slice(0, 150));
+        results.push({
+          index: i + 1,
+          role: role,
+          maskedKey: masked,
+          status: "ERROR",
+          httpCode: lastCode,
+          latency: elapsed,
+          message: lastBody.slice(0, 150)
+        });
+      }
+    } catch (e) {
+      Logger.log("   ❌ Fetch Exception: " + e.message);
+      results.push({
+        index: i + 1,
+        role: role,
+        maskedKey: masked,
+        status: "FAILED",
+        error: e.message
+      });
     }
   }
 
-  Logger.log("--- DIAGNOSTICS COMPLETE ---");
+  Logger.log("====================================================");
+  Logger.log("📊 SUMMARY:");
+  const activeCount = results.filter(r => r.status === 'ACTIVE').length;
+  Logger.log("   Active Keys Ready for Registration: " + activeCount + " of " + keys.length);
+  if (keys.length >= 2) {
+    Logger.log("   🛡️ Dual-Key Redundancy: ENABLED (Zero-downtime automatic failover)");
+  } else {
+    Logger.log("   ℹ️ Tip: Add a second key (GEMINI_API_KEY_2) for 100% failover protection!");
+  }
+  Logger.log("====================================================");
+
+  return results;
 }
 
 /**
- * HELPER: One-click setter for GEMINI_API_KEY in Script Properties
- * You can also set this directly in Apps Script Project Settings (gear icon) ➔ Script Properties!
+ * HELPER: One-click setter for DUAL Gemini API Keys
+ * Edit the two keys below and click '▷ Run'!
  */
-function SETUP_GEMINI_API_KEY() {
-  const newApiKey = "PASTE_YOUR_GEMINI_API_KEY_HERE";
-  if (newApiKey.indexOf("PASTE_") === 0) {
+function SETUP_GEMINI_API_KEYS(key1, key2) {
+  const primary = (key1 || "PASTE_PRIMARY_GEMINI_KEY_HERE").trim();
+  const backup = (key2 || "PASTE_BACKUP_GEMINI_KEY_HERE").trim();
+
+  const scriptProps = PropertiesService.getScriptProperties();
+
+  if (primary && primary.indexOf("PASTE_") < 0) {
+    scriptProps.setProperty("GEMINI_API_KEY", primary);
+    Logger.log("✅ Primary GEMINI_API_KEY saved successfully!");
+  } else if (!key1) {
+    Logger.log("ℹ️ Primary key was not changed.");
+  }
+
+  if (backup && backup.indexOf("PASTE_") < 0) {
+    scriptProps.setProperty("GEMINI_API_KEY_2", backup);
+    Logger.log("✅ Backup GEMINI_API_KEY_2 saved successfully!");
+  } else if (!key2) {
+    Logger.log("ℹ️ Backup key was not changed.");
+  }
+
+  Logger.log("🔄 Testing configured keys now...");
+  return CHECK_GEMINI_API_KEYS_QUOTA();
+}
+
+/**
+ * HELPER: Single key setter for GEMINI_API_KEY (backward compatible)
+ */
+function SETUP_GEMINI_API_KEY(newKey) {
+  const key = (newKey || "PASTE_YOUR_GEMINI_API_KEY_HERE").trim();
+  if (key.indexOf("PASTE_") === 0) {
     Logger.log("❌ Please replace 'PASTE_YOUR_GEMINI_API_KEY_HERE' with your real Gemini API key before running!");
     return;
   }
-  PropertiesService.getScriptProperties().setProperty("GEMINI_API_KEY", newApiKey.trim());
+  PropertiesService.getScriptProperties().setProperty("GEMINI_API_KEY", key);
   Logger.log("✅ GEMINI_API_KEY successfully saved into Script Properties!");
+  CHECK_GEMINI_API_KEYS_QUOTA();
 }

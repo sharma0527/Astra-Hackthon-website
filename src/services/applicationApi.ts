@@ -52,16 +52,31 @@ export function validateApplicationId(rawId: string): { isValid: boolean; error?
     };
   }
 
-  const normalized = trimmed.toUpperCase();
+  let normalized = trimmed.toUpperCase();
+
+  // If user enters purely a number like "1", "100", "1000", automatically format it
+  if (/^\d+$/.test(normalized)) {
+    const num = parseInt(normalized, 10);
+    const seq = num >= 1000 ? String(num) : ('000' + num).slice(-3);
+    normalized = `ASTRA-2026-TEAM${seq}`;
+  } else if (/^(?:TEAM-?|ASTRA-TEAM-?)(\d+)$/i.test(normalized)) {
+    const match = normalized.match(/^(?:TEAM-?|ASTRA-TEAM-?)(\d+)$/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      const seq = num >= 1000 ? String(num) : ('000' + num).slice(-3);
+      normalized = `ASTRA-2026-TEAM${seq}`;
+    }
+  }
+
   // Valid formats supported:
-  // - Unpredictable UUID: ASTRA-2026-7F3A91C4D8E24607A91C5D8E3F2B617C (32 hex chars)
-  // - Legacy / Sequential: ASTRA-2026-TEAM001 or ASTRA-TEAM-001
+  // - Unpredictable UUID: ASTRA-2026-7F3A91C4D8E24607A91C5D8E3F2B617C
+  // - Legacy / Sequential: ASTRA-2026-TEAM001, ASTRA-2026-TEAM1000, ASTRA-TEAM-001, ASTRA-TEAM-1000
   // - Lenient prefix matching: Any ASTRA-* identifier
   const isValidFormat = /^ASTRA(-[A-Z0-9_-]+)+$/i.test(normalized);
   if (!isValidFormat) {
     return {
       isValid: false,
-      error: "Invalid Application ID. Example: ASTRA-2026-7F3A91... or ASTRA-2026-TEAM001",
+      error: "Invalid Application ID. Example: ASTRA-2026-TEAM001 or ASTRA-2026-TEAM1000",
       normalizedId: normalized
     };
   }
