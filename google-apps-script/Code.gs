@@ -2263,13 +2263,20 @@ const PAYMENT_CONFIG = {
   RECIPIENT_NAME: "sivakottamachalla", // Name appearing on the UPI QR
   RECIPIENT_UPI: "sivakottamachalla@ybl", // Your UPI ID / VPA
 
-  // 3. Verified Gemini API Key (Tested & Working)
-  GEMINI_API_KEY: "AIzaSyBsoPpumEn7yExUtac7xtbF2a_43QK_REs",
-
-  // 4. (Optional) Google Drive Folder ID to store payment screenshots
+  // 3. (Optional) Google Drive Folder ID to store payment screenshots
   // Leave empty "" to save in root Drive
   SCREENSHOT_FOLDER_ID: ""
 };
+
+/**
+ * Retrieve Gemini API key securely from Google Apps Script 'Script Properties'
+ * (Project Settings ⚙️ ➔ Script Properties ➔ GEMINI_API_KEY)
+ */
+function getGeminiApiKey_() {
+  const scriptProps = PropertiesService.getScriptProperties();
+  const key = scriptProps.getProperty('GEMINI_API_KEY');
+  return (key && key.trim().length > 10) ? key.trim() : '';
+}
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -2517,11 +2524,12 @@ function doPost(e) {
  * ULTRA-STRICT ZERO-TOLERANCE PAYMENT INSPECTOR
  */
 function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
-  // If API key is not yet configured, provide a clear error
-  if (!PAYMENT_CONFIG.GEMINI_API_KEY || PAYMENT_CONFIG.GEMINI_API_KEY.indexOf("PASTE_") === 0) {
+  // 1. Fetch API key from Script Properties (Project Settings ⚙️ ➔ Script Properties ➔ GEMINI_API_KEY)
+  const apiKey = getGeminiApiKey_();
+  if (!apiKey) {
     return {
       isLegit: false,
-      rejectionReason: "System Error: Gemini AI API Key is not configured in Apps Script Code.gs."
+      rejectionReason: "Configuration Error: GEMINI_API_KEY is not set in Script Properties. Please add it under Apps Script Project Settings (gear icon) ➔ Script Properties."
     };
   }
 
@@ -2536,10 +2544,11 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
 
   const promptText = 
     "You are a strict Bank & UPI Payment Fraud Inspector for the ASTRA Hackathon.\n" +
-    "Inspect this uploaded image carefully.\n" +
+    "Inspect this uploaded image with MAXIMUM STRICTNESS.\n" +
     "MANDATORY CRITERIA:\n" +
-    "1. IMAGE TYPE: The image MUST be an authentic screenshot of a successful Indian UPI payment app (Google Pay, PhonePe, Paytm, BHIM, CRED, AmazonPay, or Bank App). Do NOT reject based on date, time, or year (all dates and years are acceptable).\n" +
-    "2. RECIPIENT MATCH: The payment recipient in the screenshot MUST be paid to: \"" + PAYMENT_CONFIG.RECIPIENT_NAME + "\", \"Siva Kotamma Challa\", or UPI ID containing \"" + PAYMENT_CONFIG.RECIPIENT_UPI + "\". If paid to these, recipientMatches MUST be true.\n" +
+    "1. IMAGE TYPE: The image MUST be an authentic screenshot of a successful Indian UPI payment app (Google Pay, PhonePe, Paytm, BHIM, CRED, AmazonPay, or Bank App).\n" +
+    "   CRITICAL: If the image is a photo of cooking pots, kitchen utensils, food, selfie, meme, document, random object, or anything other than a genuine UPI transaction screen, YOU MUST SET isAuthenticUPI to false.\n" +
+    "2. RECIPIENT MATCH: The payment recipient in the screenshot MUST be paid to: \"" + PAYMENT_CONFIG.RECIPIENT_NAME + "\", \"Siva Kotamma Challa\", or UPI ID containing \"" + PAYMENT_CONFIG.RECIPIENT_UPI + "\". If paid to anyone else or a store, recipientMatches MUST be false.\n" +
     "3. EXACT AMOUNT: The amount transferred MUST be AT LEAST " + PAYMENT_CONFIG.EXPECTED_AMOUNT + " INR (₹999).\n" +
     "4. UTR EXTRACTION: Find the 12-digit UPI Reference Number / UTR in the screenshot. Does it contain or match the user entered UTR: \"" + userEnteredUtr + "\"?\n\n" +
     "Respond ONLY in strict JSON format without markdown:\n" +
@@ -2571,7 +2580,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
 
   for (let i = 0; i < candidateModels.length; i++) {
     const model = candidateModels[i];
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + PAYMENT_CONFIG.GEMINI_API_KEY;
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
     try {
       const res = UrlFetchApp.fetch(url, {
         method: "post",
@@ -2601,20 +2610,11 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
     }
   }
 
-  // If all models are temporarily busy / rate-limited (503), gracefully fall back
+  // If AI models could not process or return JSON, NEVER auto-approve! Strictly fail!
   if (!parsedResult) {
-    const cleanUser = String(userEnteredUtr).replace(/\D/g, '');
-    if (cleanUser.length === 12) {
-      return {
-        isLegit: true,
-        confidence: "HIGH",
-        extractedAmount: PAYMENT_CONFIG.EXPECTED_AMOUNT,
-        rejectionReason: "Verified (AI service busy; verified via 12-digit UTR)"
-      };
-    }
     return {
       isLegit: false,
-      rejectionReason: "AI verification server is currently busy. Please retry in 10 seconds with your clear screenshot."
+      rejectionReason: "Payment Verification Failed: AI could not verify this image. Please upload a clear, genuine UPI payment receipt screenshot."
     };
   }
 
@@ -2622,7 +2622,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
   if (!parsedResult.isAuthenticUPI) {
     return {
       isLegit: false,
-      rejectionReason: "Invalid Image: The uploaded file is NOT a valid UPI payment receipt."
+      rejectionReason: "Fake Payment Rejected: The uploaded image is NOT a valid UPI payment screenshot. (" + (parsedResult.failureReason || "Invalid image type") + ")"
     };
   }
 
@@ -2705,14 +2705,40 @@ function CHECK_REGISTRATION_SHEET_CONNECTION() {
     Logger.log("❌ Drive Error: " + err);
   }
 
-  // 3. Check Gemini API Connection
-  try {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest?key=" + PAYMENT_CONFIG.GEMINI_API_KEY;
-    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    Logger.log("✅ Gemini AI Key response status: " + res.getResponseCode());
-  } catch (err) {
-    Logger.log("❌ Gemini API Error: " + err);
+  // 3. Check Gemini API Connection from Script Properties
+  const apiKey = getGeminiApiKey_();
+  if (!apiKey) {
+    Logger.log("⚠️ GEMINI_API_KEY is NOT set in Script Properties yet!");
+    Logger.log("👉 Go to Project Settings (gear ⚙️ icon on left) ➔ Script Properties ➔ Add 'GEMINI_API_KEY'.");
+  } else {
+    try {
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest?key=" + apiKey;
+      const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+      const code = res.getResponseCode();
+      Logger.log("✅ Gemini AI API HTTP Status: " + code);
+      if (code === 200) {
+        Logger.log("✅ Gemini API Key is working perfectly!");
+      } else {
+        Logger.log("❌ Gemini API Key Error: " + res.getContentText());
+      }
+    } catch (err) {
+      Logger.log("❌ Gemini API Fetch Error: " + err);
+    }
   }
 
-  Logger.log("--- DIAGNOSTICS COMPLETE. ALL SYSTEMS OPERATIONAL ---");
+  Logger.log("--- DIAGNOSTICS COMPLETE ---");
+}
+
+/**
+ * HELPER: One-click setter for GEMINI_API_KEY in Script Properties
+ * You can also set this directly in Apps Script Project Settings (gear icon) ➔ Script Properties!
+ */
+function SETUP_GEMINI_API_KEY() {
+  const newApiKey = "PASTE_YOUR_GEMINI_API_KEY_HERE";
+  if (newApiKey.indexOf("PASTE_") === 0) {
+    Logger.log("❌ Please replace 'PASTE_YOUR_GEMINI_API_KEY_HERE' with your real Gemini API key before running!");
+    return;
+  }
+  PropertiesService.getScriptProperties().setProperty("GEMINI_API_KEY", newApiKey.trim());
+  Logger.log("✅ GEMINI_API_KEY successfully saved into Script Properties!");
 }
