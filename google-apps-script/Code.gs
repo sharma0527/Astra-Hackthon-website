@@ -3249,7 +3249,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
       ]
     }],
     generationConfig: {
-      response_mime_type: "application/json",
+      responseMimeType: "application/json",
       temperature: 0.0
     }
   };
@@ -3265,7 +3265,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
 
     for (let i = 0; i < candidateModels.length; i++) {
       const cm = candidateModels[i];
-      const url = "https://generativelanguage.googleapis.com/" + cm.version + "/models/" + cm.model + ":generateContent?key=" + apiKey;
+      const url = "https://generativelanguage.googleapis.com/" + cm.version + "/models/" + cm.model + ":generateContent?key=" + encodeURIComponent(apiKey);
 
       try {
         const res = UrlFetchApp.fetch(url, {
@@ -3311,22 +3311,13 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
     }
   }
 
-  // Heuristic Fallback: If AI keys encounter endpoint issues or quota, validate 12-digit UTR and receipt existence
+  // Strict Fail-Closed Security: Never approve a payment when AI is unreachable
   if (!parsedResult) {
-    const cleanUser = String(userEnteredUtr).replace(/\D/g, '');
-    if (cleanUser.length >= 10 && cleanBase64 && cleanBase64.length > 500) {
-      Logger.log("🛡️ AI models unreachable. Engaging Heuristic UTR Verification for UTR: " + cleanUser);
-      return {
-        isLegit: true,
-        confidence: "HEURISTIC_BACKUP",
-        extractedAmount: 999,
-        rejectionReason: "Verified via Heuristic UTR Match (Receipt Stored in Drive)"
-      };
-    }
-
     return {
       isLegit: false,
-      rejectionReason: "Payment Verification Failed: AI could not verify this image. Please upload a clear, genuine UPI payment receipt screenshot."
+      confidence: "AI_UNAVAILABLE",
+      extractedAmount: 0,
+      rejectionReason: "Payment Verification Service is temporarily busy. Please wait a few seconds and tap Submit again."
     };
   }
 
@@ -3338,24 +3329,22 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
     };
   }
 
-  // Check 2: Was it paid to Sivakotammachalla?
+  // Check 2: Was it paid to Sivakotammachalla? Strict check without generic 'ybl'
   const detectedRec = String(parsedResult.detectedRecipient || '').toLowerCase();
   const isRecipientOk = parsedResult.recipientMatches || 
-                        detectedRec.indexOf('siva') >= 0 || 
-                        detectedRec.indexOf('kotamma') >= 0 || 
-                        detectedRec.indexOf('challa') >= 0 || 
                         detectedRec.indexOf('sivakottamachalla') >= 0 ||
-                        detectedRec.indexOf('ybl') >= 0;
+                        (detectedRec.indexOf('siva') >= 0 && detectedRec.indexOf('kotamma') >= 0) ||
+                        detectedRec.indexOf('siva kotamma challa') >= 0;
   if (!isRecipientOk) {
     return {
       isLegit: false,
-      rejectionReason: "Recipient Mismatch: This payment was NOT sent to " + PAYMENT_CONFIG.RECIPIENT_NAME + ". (Detected recipient: " + (parsedResult.detectedRecipient || "Unknown") + ")"
+      rejectionReason: "Recipient Mismatch: This payment was NOT sent to " + PAYMENT_CONFIG.RECIPIENT_NAME + " (" + PAYMENT_CONFIG.RECIPIENT_UPI + "). Detected recipient: " + (parsedResult.detectedRecipient || "Unknown")
     };
   }
 
-  // Check 3: Is the amount correct? (₹999, ₹1000, or above are all valid)
+  // Check 3: Is the amount correct? (₹999 or ₹1000)
   const amountVal = Number(parsedResult.extractedAmount) || 0;
-  const isAmountOk = parsedResult.amountMatches || amountVal >= 999 || amountVal >= 1000;
+  const isAmountOk = parsedResult.amountMatches || amountVal >= 999;
   if (!isAmountOk) {
     return {
       isLegit: false,
@@ -3368,8 +3357,8 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
   const cleanUser = String(userEnteredUtr).replace(/\D/g, '');
   const isUtrOk = parsedResult.utrMatches || 
                   cleanExtracted === cleanUser || 
-                  cleanExtracted.indexOf(cleanUser) >= 0 || 
-                  cleanUser.indexOf(cleanExtracted) >= 0;
+                  (cleanExtracted.length >= 10 && cleanUser.indexOf(cleanExtracted) >= 0) || 
+                  (cleanUser.length >= 10 && cleanExtracted.indexOf(cleanUser) >= 0);
   if (!isUtrOk) {
     return {
       isLegit: false,

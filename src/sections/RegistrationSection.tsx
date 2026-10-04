@@ -417,13 +417,28 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const response = await fetch(paymentConfig.appsScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
-        redirect: 'follow',
-        signal: controller.signal
-      });
+      // Try proxy endpoint first (/api/register) to prevent browser CORS/redirect drops on Vercel
+      let response: Response;
+      try {
+        response = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        if (response.status === 404 || response.status === 405) {
+          throw new Error('Proxy unavailable');
+        }
+      } catch (proxyErr) {
+        // Fallback to direct Apps Script URL
+        response = await fetch(paymentConfig.appsScriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload),
+          redirect: 'follow',
+          signal: controller.signal
+        });
+      }
       clearTimeout(timeoutId);
 
       const responseText = await response.text();
@@ -465,7 +480,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
       if (err.name === 'AbortError') {
         setErrorMsg('Network timeout: Mobile connection was too slow to upload. Please connect to a stable connection and try submitting again.');
       } else if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-        setErrorMsg('Network connection issue: Unable to reach verification server. Please verify your mobile data or Wi-Fi is active and tap Submit again.');
+        setErrorMsg('Network connection issue: Unable to reach verification server. If using Brave Browser, please disable Brave Shields (lion icon 🦁 ➔ toggle OFF) or test in Chrome/Edge, and tap Submit again.');
       } else {
         setErrorMsg(err.message || 'Network error while reaching verification server. Please check your connection and retry.');
       }

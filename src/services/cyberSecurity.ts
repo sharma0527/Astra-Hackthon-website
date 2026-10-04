@@ -8,7 +8,7 @@ export const GOOGLE_APPS_SCRIPT_URL =
 
 export function getSecureEndpoint(): string {
   const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL;
-  if (envUrl && typeof envUrl === 'string' && envUrl.startsWith('https://')) {
+  if (envUrl && typeof envUrl === 'string' && !envUrl.includes("AKfycbydvjtg") && !envUrl.includes("AKfycbzCGnTzRNa") && envUrl.startsWith('https://')) {
     return envUrl.trim();
   }
   return GOOGLE_APPS_SCRIPT_URL;

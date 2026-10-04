@@ -452,6 +452,16 @@ export const eventConfig = {
 
 export const upiPaymentUri = "upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon";
 
+const LIVE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzppQJykXlE2bViMdEbzUn8PZ0yx6tDUtbfIiVBMnRriwWVbLW2lrytJhyoiWxAezpG/exec";
+
+function resolveAppsScriptUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL;
+  if (envUrl && !envUrl.includes("AKfycbydvjtg") && !envUrl.includes("AKfycbzCGnTzRNa") && envUrl.startsWith("https://script.google.com")) {
+    return envUrl;
+  }
+  return LIVE_APPS_SCRIPT_URL;
+}
+
 export const paymentConfig = {
   feeAmount: 999,
   registrationFee: 999,
@@ -460,7 +470,7 @@ export const paymentConfig = {
   friendUpiId: "sivakottamachalla@ybl",
   friendName: "sivakottamachalla",
   googleFormUrl: "https://forms.gle/xhjE57wm7rUJ2HWH9",
-  appsScriptUrl: import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzppQJykXlE2bViMdEbzUn8PZ0yx6tDUtbfIiVBMnRriwWVbLW2lrytJhyoiWxAezpG/exec",
+  appsScriptUrl: resolveAppsScriptUrl(),
   friendUpiQrUrl: "/upi-qr.svg",
   upiPaymentUri
 };

@@ -1,7 +1,8 @@
 const DEFAULT_API_URL =
   "https://script.google.com/macros/s/AKfycbzppQJykXlE2bViMdEbzUn8PZ0yx6tDUtbfIiVBMnRriwWVbLW2lrytJhyoiWxAezpG/exec";
 
-const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
+const envUrl = import.meta.env.VITE_API_URL;
+const API_URL = (envUrl && !envUrl.includes("AKfycbydvjtg") && !envUrl.includes("AKfycbzCGnTzRNa")) ? envUrl : DEFAULT_API_URL;
 
 export interface TeamMember {
   name: string;
