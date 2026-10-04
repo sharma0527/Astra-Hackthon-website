@@ -450,7 +450,7 @@ export const eventConfig = {
   ] as FaqItem[]
 };
 
-const upiPaymentUri = "upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon";
+export const upiPaymentUri = "upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon";
 
 export const paymentConfig = {
   feeAmount: 999,
@@ -461,5 +461,6 @@ export const paymentConfig = {
   friendName: "sivakottamachalla",
   googleFormUrl: "https://forms.gle/xhjE57wm7rUJ2HWH9",
   appsScriptUrl: import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec",
-  friendUpiQrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiPaymentUri)}`
+  friendUpiQrUrl: "/upi-qr.svg",
+  upiPaymentUri
 };

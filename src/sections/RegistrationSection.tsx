@@ -62,8 +62,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [qrImgSrc, setQrImgSrc] = useState(
-    paymentConfig.friendUpiQrUrl ||
-    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon')}`
+    paymentConfig.friendUpiQrUrl || '/upi-qr.svg'
   );
 
   // Check if current device has a completed registration
@@ -227,10 +226,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
     setSavedRegistration(null);
     setScreenshotBase64('');
     setPreviewUrl('');
-    setQrImgSrc(
-      paymentConfig.friendUpiQrUrl ||
-      `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('upi://pay?pa=sivakottamachalla@ybl&pn=sivakottamachalla&am=999&cu=INR&tn=ASTRA%20Hackathon')}`
-    );
+    setQrImgSrc(paymentConfig.friendUpiQrUrl || '/upi-qr.svg');
     setFormData({
       teamName: '',
       teamSize: '4',

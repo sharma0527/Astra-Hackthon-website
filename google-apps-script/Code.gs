@@ -268,11 +268,11 @@ function CHECK_REGISTRATION_SHEET_CONNECTION() {
       const role = (idx === 0) ? 'Primary' : 'Backup #' + idx;
       const masked = k.slice(0, 6) + '...' + k.slice(-6);
       try {
-        const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash?key=' + k;
+        const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash?key=' + k;
         const res = UrlFetchApp.fetch(testUrl, { muteHttpExceptions: true });
         const code = res.getResponseCode();
         if (code === 200) {
-          Logger.log('   ✅ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): 100% OPERATIONAL (gemini-3.8-flash)');
+          Logger.log('   ✅ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): 100% OPERATIONAL (gemini-2.5-flash)');
         } else if (code === 429) {
           Logger.log('   ⚠️ Key #' + (idx + 1) + ' (' + role + ' | ' + masked + '): QUOTA EXCEEDED (Auto-failover will engage)');
         } else if (code === 403) {
@@ -2815,7 +2815,7 @@ function doPost(e) {
       sheet = ss.getSheetByName('REGISTRATIONS') || ss.insertSheet('Form Responses 1');
     }
 
-    // Auto-create 35 exact headers if sheet is brand new
+    // Auto-create standard 35 headers if sheet is brand new
     if (sheet.getLastRow() === 0) {
       sheet.appendRow([
         'Timestamp',
@@ -2848,14 +2848,51 @@ function doPost(e) {
         'Member 5 Name',
         'Member 5 Email',
         'Member 5 Roll No',
-        'Member 5 Branch',
-        'Member 5 Year',
-        'Member 5 Phone Number',
-        'ENTER THE UTR NUMBER',
-        'PAYMENT PICTURE'
+        'Team ID',
+        'Application ID',
+        'Status',
+        'Last Updated',
+        'Review Notes'
       ]);
       sheet.getRange(1, 1, 1, 35).setFontWeight('bold');
     }
+
+    // Dynamically resolve existing headers so ANY sheet column order works 100% perfectly
+    const existingCols = sheet.getLastColumn();
+    let headerRow = sheet.getRange(1, 1, 1, existingCols).getValues()[0].map(h => String(h || '').trim());
+    let normHeaders = headerRow.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+    function findColIdx(candidates) {
+      for (let i = 0; i < normHeaders.length; i++) {
+        for (let j = 0; j < candidates.length; j++) {
+          const nc = candidates[j].toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (normHeaders[i] === nc || normHeaders[i].indexOf(nc) >= 0) {
+            return i; // 0-based
+          }
+        }
+      }
+      return -1;
+    }
+
+    // Ensure required tracking & payment columns exist if not present in sheet
+    const neededHeaders = [
+      { name: 'Team ID', candidates: ['teamid', 'teamidentification'] },
+      { name: 'Application ID', candidates: ['applicationid', 'appid', 'registrationid'] },
+      { name: 'Status', candidates: ['status', 'appstatus'] },
+      { name: 'Last Updated', candidates: ['lastupdated', 'updatedat'] },
+      { name: 'Review Notes', candidates: ['reviewnotes', 'notes', 'remarks'] },
+      { name: 'ENTER THE UTR NUMBER', candidates: ['entertheutrnumber', 'utrnumber', 'utr', 'transactionid'] },
+      { name: 'PAYMENT PICTURE', candidates: ['paymentpicture', 'screenshot', 'paymentproof', 'receipt'] }
+    ];
+
+    neededHeaders.forEach(function(item) {
+      if (findColIdx(item.candidates) === -1) {
+        const nextCol = sheet.getLastColumn() + 1;
+        sheet.getRange(1, nextCol).setValue(item.name).setFontWeight('bold');
+        headerRow.push(item.name);
+        normHeaders.push(item.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      }
+    });
 
     // 3. Collect all team members for strict email and roll number duplicate checking
     const submittedMembers = [
@@ -2891,29 +2928,48 @@ function doPost(e) {
       }
     }
 
-    // 4. Duplicate Check across all previously submitted rows (Email, Roll No, UTR)
+    // 4. Duplicate Check across all previously submitted rows using dynamically resolved columns
     const lastRow = sheet.getLastRow();
     let duplicateDetected = null;
 
     if (lastRow >= 2) {
-      const numCols = Math.min(sheet.getLastColumn() || 35, 35);
+      const numCols = sheet.getLastColumn();
       const records = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+
+      const rollIndices = [
+        findColIdx(['teamleadrollno', 'leadroll']),
+        findColIdx(['member2rollno']),
+        findColIdx(['member3rollno']),
+        findColIdx(['member4rollno']),
+        findColIdx(['member5rollno'])
+      ].filter(function(idx) { return idx >= 0; });
+
+      const emailIndices = [
+        findColIdx(['teamleademail', 'leademail']),
+        findColIdx(['emailaddress', 'email']),
+        findColIdx(['member2email']),
+        findColIdx(['member3email']),
+        findColIdx(['member4email']),
+        findColIdx(['member5email'])
+      ].filter(function(idx) { return idx >= 0; });
+
+      const utrIndex = findColIdx(['entertheutrnumber', 'utrnumber', 'utr', 'transactionid']);
+      const teamNameIndex = findColIdx(['teamname', 'nameofteam']);
 
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         const sheetRowNum = i + 2;
 
-        // Skip rows already tagged as rejected duplicate audit records
+        // Skip rejected audit rows
         const firstColStr = String(row[0] || '').toUpperCase();
         const thirdColStr = String(row[2] || '').toUpperCase();
         if (firstColStr.indexOf('REJECTED') >= 0 || thirdColStr.indexOf('REJECTED') >= 0) {
           continue;
         }
 
-        const existingTeamName = cleanText_(row[2]) || ('Row ' + sheetRowNum);
+        const existingTeamName = (teamNameIndex >= 0 && cleanText_(row[teamNameIndex])) || cleanText_(row[2]) || ('Row ' + sheetRowNum);
 
-        // Check Roll Numbers across known roll columns: 6 (idx 5), 12 (idx 11), 18 (idx 17), 24 (idx 23), 30 (idx 29)
-        const rollIndices = [5, 11, 17, 23, 29];
+        // Check Roll Numbers
         for (let rIdx = 0; rIdx < rollIndices.length; rIdx++) {
           const col = rollIndices[rIdx];
           const cellRoll = normalizeRoll_(row[col]);
@@ -2935,8 +2991,7 @@ function doPost(e) {
         }
         if (duplicateDetected) break;
 
-        // Check Emails across known email columns: 2 (idx 1), 5 (idx 4), 11 (idx 10), 17 (idx 16), 23 (idx 22), 29 (idx 28)
-        const emailIndices = [1, 4, 10, 16, 22, 28];
+        // Check Emails
         for (let eIdx = 0; eIdx < emailIndices.length; eIdx++) {
           const col = emailIndices[eIdx];
           const cellEmail = normalizeEmail_(row[col]);
@@ -2958,17 +3013,19 @@ function doPost(e) {
         }
         if (duplicateDetected) break;
 
-        // Check Duplicate UTR (Column 34 in 1-based, index 33)
-        const existingUtr = cleanText_(row[33] || row[10] || '').replace(/\D/g, '');
-        if (inputUtr && existingUtr && existingUtr === inputUtr) {
-          duplicateDetected = {
-            type: 'UTR',
-            value: inputUtr,
-            member: { role: 'Payment', name: 'UTR' },
-            rowNumber: sheetRowNum,
-            existingTeam: existingTeamName
-          };
-          break;
+        // Check Duplicate UTR
+        if (utrIndex >= 0) {
+          const existingUtr = cleanText_(row[utrIndex]).replace(/\D/g, '');
+          if (inputUtr && existingUtr && existingUtr === inputUtr) {
+            duplicateDetected = {
+              type: 'UTR',
+              value: inputUtr,
+              member: { role: 'Payment', name: 'UTR' },
+              rowNumber: sheetRowNum,
+              existingTeam: existingTeamName
+            };
+            break;
+          }
         }
       }
     }
@@ -2981,60 +3038,46 @@ function doPost(e) {
         ? 'Email (' + duplicateDetected.value + ' - ' + duplicateDetected.member.role + ') already registered in Team "' + duplicateDetected.existingTeam + '" (Row ' + duplicateDetected.rowNumber + ')'
         : 'UTR / Transaction ID (' + duplicateDetected.value + ') was already used by Team "' + duplicateDetected.existingTeam + '" (Row ' + duplicateDetected.rowNumber + ')';
 
-      // 1. Automatically append this duplicate submission to the LAST ROW of the Sheet for audit
-      sheet.appendRow([
-        '[DUPLICATE REJECTED] ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss'),
-        leadEmail,
-        '[REJECTED DUPLICATE] ' + teamName,
-        leadName,
-        leadEmail,
-        cleanText_(data.leadRoll),
-        cleanText_(data.leadBranch),
-        cleanText_(data.leadYear),
-        leadPhone,
-        cleanText_(data.m2Name),
-        normalizeEmail_(data.m2Email),
-        cleanText_(data.m2Roll),
-        cleanText_(data.m2Branch),
-        cleanText_(data.m2Year),
-        normalizePhone_(data.m2Phone),
-        cleanText_(data.m3Name),
-        normalizeEmail_(data.m3Email),
-        cleanText_(data.m3Roll),
-        cleanText_(data.m3Branch),
-        cleanText_(data.m3Year),
-        normalizePhone_(data.m3Phone),
-        cleanText_(data.m4Name),
-        normalizeEmail_(data.m4Email),
-        cleanText_(data.m4Roll),
-        cleanText_(data.m4Branch),
-        cleanText_(data.m4Year),
-        normalizePhone_(data.m4Phone),
-        cleanText_(data.m5Name),
-        normalizeEmail_(data.m5Email),
-        cleanText_(data.m5Roll),
-        cleanText_(data.m5Branch),
-        cleanText_(data.m5Year),
-        data.m5Phone ? normalizePhone_(data.m5Phone) : '',
-        inputUtr,
-        dupReason
-      ]);
+      const auditCols = sheet.getLastColumn();
+      const auditRow = new Array(auditCols).fill('');
+      function setAuditCell(candidates, val) {
+        const idx = findColIdx(candidates);
+        if (idx >= 0 && idx < auditCols) auditRow[idx] = val;
+      }
 
-      // 2. Format that last row in RED color so it stands out immediately
+      setAuditCell(['timestamp'], '[DUPLICATE REJECTED] ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss'));
+      setAuditCell(['emailaddress', 'email'], leadEmail);
+      setAuditCell(['teamname', 'nameofteam'], '[REJECTED DUPLICATE] ' + teamName);
+      setAuditCell(['teamleadname', 'leadname'], leadName);
+      setAuditCell(['teamleademail'], leadEmail);
+      setAuditCell(['teamleadrollno', 'leadroll'], cleanText_(data.leadRoll));
+      setAuditCell(['teamleadbranch', 'leadbranch'], cleanText_(data.leadBranch));
+      setAuditCell(['teamleadyear', 'leadyear'], cleanText_(data.leadYear));
+      setAuditCell(['teamleadphonenumber', 'leadphone'], leadPhone);
+      setAuditCell(['member2name'], cleanText_(data.m2Name));
+      setAuditCell(['member2email'], normalizeEmail_(data.m2Email));
+      setAuditCell(['member2rollno'], cleanText_(data.m2Roll));
+      setAuditCell(['member3name'], cleanText_(data.m3Name));
+      setAuditCell(['member3email'], normalizeEmail_(data.m3Email));
+      setAuditCell(['member3rollno'], cleanText_(data.m3Roll));
+      setAuditCell(['member4name'], cleanText_(data.m4Name));
+      setAuditCell(['member4email'], normalizeEmail_(data.m4Email));
+      setAuditCell(['member4rollno'], cleanText_(data.m4Roll));
+      setAuditCell(['member5name'], cleanText_(data.m5Name));
+      setAuditCell(['member5email'], normalizeEmail_(data.m5Email));
+      setAuditCell(['member5rollno'], cleanText_(data.m5Roll));
+      setAuditCell(['entertheutrnumber', 'utrnumber', 'utr'], inputUtr);
+      setAuditCell(['status'], 'REJECTED');
+      setAuditCell(['reviewnotes', 'notes', 'remarks'], dupReason);
+
+      sheet.appendRow(auditRow);
+
       const dupRowIdx = sheet.getLastRow();
-      const dupRange = sheet.getRange(dupRowIdx, 1, 1, 35);
-      dupRange.setBackground('#ffcdd2'); // Light Red warning fill
-      dupRange.setFontColor('#b71c1c'); // Dark Crimson font
+      const dupRange = sheet.getRange(dupRowIdx, 1, 1, auditCols);
+      dupRange.setBackground('#ffcdd2');
+      dupRange.setFontColor('#b71c1c');
       dupRange.setFontWeight('bold');
 
-      // 3. Set a note on the original matching row so organizers can trace both
-      try {
-        const origCell = sheet.getRange(duplicateDetected.rowNumber, 3);
-        const prevNote = origCell.getNote();
-        origCell.setNote((prevNote ? prevNote + '\n' : '') + '⚠️ Duplicate attempt blocked on ' + new Date().toLocaleDateString() + ' by team "' + teamName + '" (' + dupReason + ')');
-      } catch (noteErr) {}
-
-      // 4. Strictly DO NOT ALLOW registration
       return sendJsonResponse_({
         status: 'duplicate_rejected',
         message: 'Registration Rejected: Duplicate detected! ' + dupReason + '. Multiple registrations with the same Email or Roll Number are strictly prohibited.'
@@ -3070,52 +3113,78 @@ function doPost(e) {
       Logger.log('Drive upload failed: ' + driveErr);
     }
 
-    // 7. Generate Registration ID
-    const registrationId = 'ASTRA-2026-' + ('000' + Math.max(1, lastRow)).slice(-3);
+    // 7. Generate Registration ID & Team ID with full 1000+ support
+    const seqNum = Math.max(1, sheet.getLastRow()); // Row index for next submission
+    const seqStr = seqNum >= 1000 ? String(seqNum) : ('000' + seqNum).slice(-3);
+    const newTeamId = 'ASTRA-TEAM-' + seqStr;
+    const newAppId = 'ASTRA-2026-TEAM' + seqStr;
 
-    // 8. EXACT 35 COLUMNS APPEND - 100% MATCHING GOOGLE FORM RESPONSE SHEET
-    sheet.appendRow([
-      new Date(),                           // 1. Timestamp
-      leadEmail,                            // 2. Email Address
-      teamName,                             // 3. TEAM NAME
-      leadName,                             // 4. Team Lead Name
-      leadEmail,                            // 5. Team Lead Email
-      cleanText_(data.leadRoll),            // 6. Team Lead Roll No
-      cleanText_(data.leadBranch),          // 7. Team Lead Branch
-      cleanText_(data.leadYear),            // 8. Team Lead Year
-      leadPhone,                            // 9. Team Lead Phone Number
-      cleanText_(data.m2Name),              // 10. Member 2 Name
-      normalizeEmail_(data.m2Email),        // 11. Member 2 Email
-      cleanText_(data.m2Roll),              // 12. Member 2 Roll No
-      cleanText_(data.m2Branch),            // 13. Member 2 Branch
-      cleanText_(data.m2Year),              // 14. Member 2 Year
-      normalizePhone_(data.m2Phone),        // 15. Member 2 Phone Number
-      cleanText_(data.m3Name),              // 16. Member 3 Name
-      normalizeEmail_(data.m3Email),        // 17. Member 3 Email
-      cleanText_(data.m3Roll),              // 18. Member 3 Roll No
-      cleanText_(data.m3Branch),            // 19. Member 3 Branch
-      cleanText_(data.m3Year),              // 20. Member 3 Year
-      normalizePhone_(data.m3Phone),        // 21. Member 3 Phone Number
-      cleanText_(data.m4Name),              // 22. Member 4 Name
-      normalizeEmail_(data.m4Email),        // 23. Member 4 Email
-      cleanText_(data.m4Roll),              // 24. Member 4 Roll No
-      cleanText_(data.m4Branch),            // 25. Member 4 Branch
-      cleanText_(data.m4Year),              // 26. Member 4 Year
-      normalizePhone_(data.m4Phone),        // 27. Member 4 Phone Number
-      cleanText_(data.m5Name),              // 28. Member 5 Name
-      normalizeEmail_(data.m5Email),        // 29. Member 5 Email
-      cleanText_(data.m5Roll),              // 30. Member 5 Roll No
-      cleanText_(data.m5Branch),            // 31. Member 5 Branch
-      cleanText_(data.m5Year),              // 32. Member 5 Year
-      data.m5Phone ? normalizePhone_(data.m5Phone) : '', // 33. Member 5 Phone Number
-      inputUtr,                             // 34. ENTER THE UTR NUMBER
-      screenshotUrl                         // 35. PAYMENT PICTURE
-    ]);
+    // 8. DYNAMIC COLUMN ROW APPEND - 100% MATCHING GOOGLE SHEET
+    const totalCols = sheet.getLastColumn();
+    const newRow = new Array(totalCols).fill('');
 
-    // 8. Return Immediate Success
+    function setCell(candidates, value) {
+      const idx = findColIdx(candidates);
+      if (idx >= 0 && idx < totalCols) {
+        newRow[idx] = (value == null ? '' : value);
+      }
+    }
+
+    setCell(['timestamp', 'time'], new Date());
+    setCell(['emailaddress', 'email', 'primaryemail'], leadEmail);
+    setCell(['teamname', 'nameofteam'], teamName);
+    setCell(['teamleadname', 'leadname'], leadName);
+    setCell(['teamleademail'], leadEmail);
+    setCell(['teamleadrollno', 'leadroll'], cleanText_(data.leadRoll));
+    setCell(['teamleadbranch', 'leadbranch'], cleanText_(data.leadBranch));
+    setCell(['teamleadyear', 'leadyear'], cleanText_(data.leadYear));
+    setCell(['teamleadphonenumber', 'leadphone'], leadPhone);
+
+    setCell(['member2name'], cleanText_(data.m2Name));
+    setCell(['member2email'], normalizeEmail_(data.m2Email));
+    setCell(['member2rollno'], cleanText_(data.m2Roll));
+    setCell(['member2branch'], cleanText_(data.m2Branch));
+    setCell(['member2year'], cleanText_(data.m2Year));
+    setCell(['member2phonenumber'], normalizePhone_(data.m2Phone));
+
+    setCell(['member3name'], cleanText_(data.m3Name));
+    setCell(['member3email'], normalizeEmail_(data.m3Email));
+    setCell(['member3rollno'], cleanText_(data.m3Roll));
+    setCell(['member3branch'], cleanText_(data.m3Branch));
+    setCell(['member3year'], cleanText_(data.m3Year));
+    setCell(['member3phonenumber'], normalizePhone_(data.m3Phone));
+
+    setCell(['member4name'], cleanText_(data.m4Name));
+    setCell(['member4email'], normalizeEmail_(data.m4Email));
+    setCell(['member4rollno'], cleanText_(data.m4Roll));
+    setCell(['member4branch'], cleanText_(data.m4Branch));
+    setCell(['member4year'], cleanText_(data.m4Year));
+    setCell(['member4phonenumber'], normalizePhone_(data.m4Phone));
+
+    setCell(['member5name'], cleanText_(data.m5Name));
+    setCell(['member5email'], normalizeEmail_(data.m5Email));
+    setCell(['member5rollno'], cleanText_(data.m5Roll));
+    setCell(['member5branch'], cleanText_(data.m5Branch));
+    setCell(['member5year'], cleanText_(data.m5Year));
+    setCell(['member5phonenumber'], data.m5Phone ? normalizePhone_(data.m5Phone) : '');
+
+    setCell(['teamid', 'teamidentification'], newTeamId);
+    setCell(['applicationid', 'appid', 'registrationid'], newAppId);
+    setCell(['status', 'appstatus'], 'SUBMITTED');
+    setCell(['lastupdated', 'updatedat'], new Date());
+    setCell(['reviewnotes', 'notes', 'remarks'], 'Application registered successfully. Verified UPI Payment (₹' + (aiResult.extractedAmount || 999) + ').');
+
+    setCell(['entertheutrnumber', 'utrnumber', 'utr', 'transactionid'], inputUtr);
+    setCell(['paymentpicture', 'screenshot', 'paymentproof', 'receipt'], screenshotUrl);
+
+    sheet.appendRow(newRow);
+
+    // 9. Return Immediate Success
     return sendJsonResponse_({
       status: 'success',
-      registrationId: registrationId,
+      registrationId: newAppId,
+      applicationId: newAppId,
+      teamId: newTeamId,
       teamName: teamName,
       leadEmail: leadEmail,
       utr: inputUtr,
@@ -3144,6 +3213,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
 
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
   const candidateModels = [
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash"
   ];
