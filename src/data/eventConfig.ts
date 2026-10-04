@@ -460,7 +460,7 @@ export const paymentConfig = {
   friendUpiId: "sivakottamachalla@ybl",
   friendName: "sivakottamachalla",
   googleFormUrl: "https://forms.gle/xhjE57wm7rUJ2HWH9",
-  appsScriptUrl: import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec",
+  appsScriptUrl: import.meta.env.VITE_API_URL || import.meta.env.VITE_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzppQJykXlE2bViMdEbzUn8PZ0yx6tDUtbfIiVBMnRriwWVbLW2lrytJhyoiWxAezpG/exec",
   friendUpiQrUrl: "/upi-qr.svg",
   upiPaymentUri
 };

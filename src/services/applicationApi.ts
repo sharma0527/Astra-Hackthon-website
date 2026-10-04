@@ -1,5 +1,5 @@
 const DEFAULT_API_URL =
-  "https://script.google.com/macros/s/AKfycbzCGnTzRNa_uj_CF_Oisaw2tmQsjDgdOp_Ymxv0J5p1zfTbyvtctoHcGJVqemAh4oB1UA/exec";
+  "https://script.google.com/macros/s/AKfycbzppQJykXlE2bViMdEbzUn8PZ0yx6tDUtbfIiVBMnRriwWVbLW2lrytJhyoiWxAezpG/exec";
 
 const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
 
