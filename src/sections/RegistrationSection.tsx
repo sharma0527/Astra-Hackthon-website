@@ -417,41 +417,20 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
         screenshotMime: screenshotMime
       };
 
-      // Ultra-robust submit with automatic retry for slow mobile networks
-      let responseText = '';
-      let lastNetworkErr: any = null;
+      // High-reliability submission with 120s timeout for Gemini AI payment verification
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 40000);
+      const response = await fetch(paymentConfig.appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-          const response = await fetch(paymentConfig.appsScriptUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload),
-            redirect: 'follow',
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-
-          responseText = await response.text();
-          if (responseText) {
-            lastNetworkErr = null;
-            break;
-          }
-        } catch (fetchErr: any) {
-          lastNetworkErr = fetchErr;
-          if (attempt < 3) {
-            // Wait 1.5s before retry
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-        }
-      }
-
-      if (lastNetworkErr && !responseText) {
-        throw lastNetworkErr;
-      }
+      const responseText = await response.text();
 
       let data: any;
       try {

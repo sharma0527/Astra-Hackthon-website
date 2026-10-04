@@ -3145,9 +3145,7 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
   const candidateModels = [
     "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.5-flash",
-    "gemini-1.5-pro"
+    "gemini-1.5-flash"
   ];
 
   const promptText = 
