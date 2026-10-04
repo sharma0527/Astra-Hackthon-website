@@ -105,17 +105,21 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
       try {
         const res = await fetch(`${paymentConfig.appsScriptUrl}?action=registration_status&t=${Date.now()}`);
         const data = await res.json();
-        if (isMounted && data && typeof data.registrationClosed === 'boolean') {
-          setIsRegistrationClosed(data.registrationClosed);
+        if (isMounted && data && (typeof data.registrationClosed === 'boolean' || typeof data.registrationClosed === 'string')) {
+          const isClosed = Boolean(data.registrationClosed === true || data.registrationClosed === 'true');
+          setIsRegistrationClosed(isClosed);
           try {
-            localStorage.setItem('astra_registration_closed', String(data.registrationClosed));
+            localStorage.setItem('astra_registration_closed', String(isClosed));
           } catch {}
         }
       } catch (err) {
         // Fallback: keep current local state
       }
     };
+
     checkLiveRegistrationStatus();
+    const intervalId = setInterval(checkLiveRegistrationStatus, 6000);
+    window.addEventListener('focus', checkLiveRegistrationStatus);
 
     // 2. Listen for cross-tab or in-page status toggles
     const handleStatusSync = () => {
@@ -130,6 +134,8 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
 
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
+      window.removeEventListener('focus', checkLiveRegistrationStatus);
       window.removeEventListener('storage', handleStatusSync);
       window.removeEventListener('registrationStatusChange', handleStatusSync);
     };

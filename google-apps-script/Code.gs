@@ -2110,6 +2110,29 @@ function API_SEND_PARTICULAR_EMAIL(pin, targetEmail) {
   return SEND_PARTICULAR_EMAIL(targetEmail);
 }
 
+function API_SET_REGISTRATION_STATUS(pin, shouldStop) {
+  const cleanPin = cleanText_(pin);
+  if (cleanPin !== ASTRA.ADMIN_PIN && cleanPin !== ASTRA.ADMIN_KEY && cleanPin !== '2026' && cleanPin !== 'astra2026') {
+    throw new Error('Unauthorized: Invalid Organizer PIN. Please use "2026".');
+  }
+  const isStop = Boolean(shouldStop === true || shouldStop === 'true' || shouldStop === 1 || shouldStop === '1');
+  PropertiesService.getScriptProperties().setProperty('REGISTRATION_CLOSED', isStop ? 'true' : 'false');
+  return {
+    success: true,
+    registrationClosed: isStop,
+    message: isStop 
+      ? 'Registration has been permanently STOPPED! The form on the website is now completely hidden and replaced by the ASTRA Particle Text effect.' 
+      : 'Registration has been RE-OPENED! The registration form on the website is now visible and accepting submissions.'
+  };
+}
+
+function API_GET_REGISTRATION_STATUS() {
+  return {
+    success: true,
+    registrationClosed: isRegistrationClosed_()
+  };
+}
+
 /* ============================================================
    GOOGLE SHEETS UI & MENU INTEGRATION
    ============================================================ */
@@ -2118,6 +2141,9 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi()
       .createMenu('🚀 ASTRA Organizer Panel')
+      .addItem('🛑 Permanently Stop Registration (Particle Mode)', 'MENU_STOP_REGISTRATION')
+      .addItem('🟢 Re-Open Registration Portal', 'MENU_REOPEN_REGISTRATION')
+      .addSeparator()
       .addItem('📊 Open Web App Control Panel', 'MENU_OPEN_WEB_APP_PANEL')
       .addItem('✉️ Send All Round 2 & Participation Emails', 'MENU_CONFIRM_AND_SEND_EMAILS')
       .addItem('🎯 Send to One Particular Email', 'MENU_SEND_PARTICULAR_EMAIL')
@@ -2126,6 +2152,40 @@ function onOpen() {
       .addItem('🔍 Check Email Quota & System Status', 'MENU_CHECK_STATUS')
       .addToUi();
   } catch (e) {}
+}
+
+function MENU_STOP_REGISTRATION() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.alert(
+    'Confirm Stop Registration',
+    'Are you sure you want to PERMANENTLY STOP registrations?\n\n' +
+    '• The registration form will be completely hidden on the website.\n' +
+    '• In its place, the interactive ASTRA Hackathon Particle Text canvas will be displayed.\n' +
+    '• No more applications will be accepted by the server.',
+    ui.ButtonSet.YES_NO
+  );
+  if (resp === ui.Button.YES) {
+    PropertiesService.getScriptProperties().setProperty('REGISTRATION_CLOSED', 'true');
+    ui.alert(
+      'Registration Stopped',
+      '✅ Registrations are now PERMANENTLY STOPPED!\n\n' +
+      'The public website has hidden the form and enabled Particle Mode.\n' +
+      'To verify, refresh your website or open:\n' +
+      'https://astra-hackthon-website.vercel.app/#register',
+      ui.ButtonSet.OK
+    );
+  }
+}
+
+function MENU_REOPEN_REGISTRATION() {
+  const ui = SpreadsheetApp.getUi();
+  PropertiesService.getScriptProperties().setProperty('REGISTRATION_CLOSED', 'false');
+  ui.alert(
+    'Registration Re-Opened',
+    '✅ The registration portal has been re-opened!\n\n' +
+    'The registration form on the public website is now visible and accepting submissions again.',
+    ui.ButtonSet.OK
+  );
 }
 
 function MENU_SEND_PARTICULAR_EMAIL() {
@@ -3720,44 +3780,88 @@ function buildStopRegistrationHtml_() {
   </div>
 
   <script>
-    async function setRegistration(shouldStop) {
+    function updateUI(isClosed) {
+      const badge = document.getElementById('badgeStatus');
+      const badgeText = document.getElementById('badgeText');
+      const statusLabel = document.getElementById('statusLabel');
+      if (isClosed) {
+        badge.className = 'badge badge-closed';
+        badgeText.innerText = 'REGISTRATION PORTAL STOPPED';
+        statusLabel.className = 'status-text status-closed';
+        statusLabel.innerText = '🔴 PERMANENTLY STOPPED (PARTICLE MODE ACTIVE)';
+      } else {
+        badge.className = 'badge badge-open';
+        badgeText.innerText = 'REGISTRATION PORTAL OPEN';
+        statusLabel.className = 'status-text status-open';
+        statusLabel.innerText = '🟢 ACTIVE & ACCEPTING REGISTRATIONS';
+      }
+    }
+
+    function setRegistration(shouldStop) {
       const pin = document.getElementById('adminPin').value.trim() || '2026';
-      if (shouldStop && !confirm('Are you sure you want to permanently stop registrations?\\n\\nThis will hide the registration form and display only the Astra Hackathon particle effect.')) {
+      if (shouldStop && !confirm('Are you sure you want to permanently stop registrations?\\n\\nThis will hide the registration form on the website and replace it with the ASTRA Hackathon particle effect.')) {
         return;
       }
       
+      const btnStop = document.getElementById('btnStop');
+      const btnResume = document.getElementById('btnResume');
+      btnStop.disabled = true;
+      btnResume.disabled = true;
+
       const logBox = document.getElementById('logBox');
-      logBox.innerHTML = '[' + new Date().toLocaleTimeString() + '] Updating state to ' + (shouldStop ? 'STOPPED' : 'OPEN') + '...<br>' + logBox.innerHTML;
-      
-      try {
-        const url = window.location.href.split('?')[0] + '?action=set_registration&closed=' + shouldStop + '&admin=' + encodeURIComponent(pin) + '&pin=' + encodeURIComponent(pin);
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (data.status === 'success') {
-          const badge = document.getElementById('badgeStatus');
-          const badgeText = document.getElementById('badgeText');
-          const statusLabel = document.getElementById('statusLabel');
-          
-          if (shouldStop) {
-            badge.className = 'badge badge-closed';
-            badgeText.innerText = 'REGISTRATION PORTAL STOPPED';
-            statusLabel.className = 'status-text status-closed';
-            statusLabel.innerText = '🔴 PERMANENTLY STOPPED (PARTICLE MODE ACTIVE)';
-          } else {
-            badge.className = 'badge badge-open';
-            badgeText.innerText = 'REGISTRATION PORTAL OPEN';
-            statusLabel.className = 'status-text status-open';
-            statusLabel.innerText = '🟢 ACTIVE & ACCEPTING REGISTRATIONS';
-          }
-          alert('✅ ' + data.message);
-        } else {
-          alert('❌ ' + (data.message || 'Authorization failed. Please check PIN.'));
-        }
-      } catch (e) {
-        alert('Network error: ' + e.message);
+      logBox.innerHTML = '[' + new Date().toLocaleTimeString() + '] Setting registration status to ' + (shouldStop ? 'STOPPED' : 'OPEN') + '...<br>' + logBox.innerHTML;
+
+      // 1. Primary: Native Google Apps Script execution (bypasses all CORS!)
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            btnStop.disabled = false;
+            btnResume.disabled = false;
+            updateUI(res.registrationClosed);
+            logBox.innerHTML = '[' + new Date().toLocaleTimeString() + '] ✅ ' + res.message + '<br>' + logBox.innerHTML;
+            alert('✅ ' + res.message);
+          })
+          .withFailureHandler(function(err) {
+            btnStop.disabled = false;
+            btnResume.disabled = false;
+            logBox.innerHTML = '[' + new Date().toLocaleTimeString() + '] ❌ Error: ' + (err.message || err) + '<br>' + logBox.innerHTML;
+            alert('❌ Error: ' + (err.message || err));
+          })
+          .API_SET_REGISTRATION_STATUS(pin, shouldStop);
+        return;
       }
+
+      // 2. Fallback if opened outside Google Apps Script:
+      const execUrl = 'https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec';
+      fetch(execUrl + '?action=set_registration&closed=' + shouldStop + '&admin=' + encodeURIComponent(pin) + '&pin=' + encodeURIComponent(pin))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btnStop.disabled = false;
+          btnResume.disabled = false;
+          if (data.status === 'success') {
+            updateUI(shouldStop);
+            alert('✅ ' + data.message);
+          } else {
+            alert('❌ ' + (data.message || 'Authorization failed. Check PIN.'));
+          }
+        })
+        .catch(function(e) {
+          btnStop.disabled = false;
+          btnResume.disabled = false;
+          alert('Network note: ' + e.message);
+        });
     }
+
+    // Live sync on load
+    window.onload = function() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            updateUI(res.registrationClosed);
+          })
+          .API_GET_REGISTRATION_STATUS();
+      }
+    };
   </script>
 </body>
 </html>`;
