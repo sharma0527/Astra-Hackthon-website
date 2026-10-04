@@ -172,7 +172,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxDim = 960;
+          const maxDim = 640;
 
           if (width > maxDim || height > maxDim) {
             if (width > height) {
@@ -189,7 +189,8 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
 
-          const compressed = canvas.toDataURL('image/jpeg', 0.75);
+          // 0.6 quality at 640px gives crisp UTR readability while keeping payload ~30KB
+          const compressed = canvas.toDataURL('image/jpeg', 0.6);
           setScreenshotBase64(compressed);
           setScreenshotMime('image/jpeg');
         };
@@ -416,13 +417,42 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
         screenshotMime: screenshotMime
       };
 
-      const response = await fetch(paymentConfig.appsScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
+      // Ultra-robust submit with automatic retry for slow mobile networks
+      let responseText = '';
+      let lastNetworkErr: any = null;
 
-      const responseText = await response.text();
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 40000);
+
+          const response = await fetch(paymentConfig.appsScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+            redirect: 'follow',
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          responseText = await response.text();
+          if (responseText) {
+            lastNetworkErr = null;
+            break;
+          }
+        } catch (fetchErr: any) {
+          lastNetworkErr = fetchErr;
+          if (attempt < 3) {
+            // Wait 1.5s before retry
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+        }
+      }
+
+      if (lastNetworkErr && !responseText) {
+        throw lastNetworkErr;
+      }
+
       let data: any;
       try {
         data = JSON.parse(responseText);
@@ -457,7 +487,13 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
         setErrorMsg(data.message || 'Payment verification failed. Please check your payment details.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Network error while reaching verification server. Please check your connection and retry.');
+      if (err.name === 'AbortError') {
+        setErrorMsg('Network timeout: Mobile connection was too slow to upload. Please connect to a stable connection and try submitting again.');
+      } else if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        setErrorMsg('Network connection issue: Unable to reach verification server. Please verify your mobile data or Wi-Fi is active and tap Submit again.');
+      } else {
+        setErrorMsg(err.message || 'Network error while reaching verification server. Please check your connection and retry.');
+      }
     } finally {
       setLoading(false);
     }
