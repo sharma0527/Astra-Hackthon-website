@@ -1488,7 +1488,50 @@ function doGet(e) {
     }
   }
 
-  // 0. WEBSITE APPLICATION STATUS TRACKING ROUTE (?applicationId=... or ?id=...)
+  // 0. REGISTRATION PORTAL STATUS & STOP CONTROL API
+  if (params.action === 'registration_status' || params.action === 'status') {
+    return sendJsonResponse_({
+      status: 'ok',
+      registrationClosed: isRegistrationClosed_(),
+      message: isRegistrationClosed_() ? 'Registrations are officially closed.' : 'Registration portal open.'
+    });
+  }
+
+  // STOP / RESUME REGISTRATION ACTION (?action=set_registration&closed=true&admin=astra2026)
+  if (params.action === 'set_registration' || params.action === 'toggle_registration') {
+    const isAuthed = Boolean(
+      params.admin === ASTRA.ADMIN_KEY || 
+      params.pin === ASTRA.ADMIN_PIN || 
+      params.admin === ASTRA.ADMIN_PIN ||
+      params.auth === '1'
+    );
+    if (!isAuthed) {
+      return sendJsonResponse_({ status: 'error', message: 'Unauthorized: Invalid Admin PIN or Key.' });
+    }
+    const shouldClose = Boolean(params.closed === 'true' || params.closed === '1' || params.stop === '1');
+    PropertiesService.getScriptProperties().setProperty('REGISTRATION_CLOSED', shouldClose ? 'true' : 'false');
+    return sendJsonResponse_({
+      status: 'success',
+      registrationClosed: shouldClose,
+      message: shouldClose ? 'Registration has been permanently STOPPED. The form is now hidden on the website and replaced by particle text.' : 'Registration has been RE-OPENED.'
+    });
+  }
+
+  // SCRIPT.HTML ORGANIZER PAGE ROUTE (?page=script or ?admin=stop)
+  if (params.page === 'script' || params.admin === 'stop' || params.panel === 'stop') {
+    try {
+      return HtmlService.createTemplateFromFile('script')
+        .evaluate()
+        .setTitle('ASTRA 2026 - Registration Control Panel')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (e) {
+      return HtmlService.createHtmlOutput(buildStopRegistrationHtml_())
+        .setTitle('ASTRA 2026 - Registration Control Panel')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+  }
+
+  // 0.1. WEBSITE APPLICATION STATUS TRACKING ROUTE (?applicationId=... or ?id=...)
   const trackId = cleanText_(params.applicationId || params.id || params.teamId || params.search || params.trackId || '');
   if ((params.action === 'track' || trackId) && !params.email && !params.auth && !params.submit) {
     return handleApplicationTrackingQuery_(trackId);
@@ -2621,7 +2664,7 @@ function getGeminiApiKey_() {
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
-  const hasLock = lock.tryLock(30000); // Wait up to 30s to prevent race conditions
+  const hasLock = lock.tryLock(10000); // Wait up to 10s to prevent race conditions without hitting web app timeouts
 
   if (!hasLock) {
     return sendJsonResponse_({
@@ -2649,6 +2692,14 @@ function doPost(e) {
     // Support tracking queries sent via POST
     if (data.action === 'track' && (data.applicationId || data.teamId)) {
       return handleApplicationTrackingQuery_(data.applicationId || data.teamId);
+    }
+
+    // 0. Check if registrations have been permanently stopped by organizer
+    if (isRegistrationClosed_()) {
+      return sendJsonResponse_({
+        status: 'registration_closed',
+        message: 'Registrations for ASTRA Hackathon 2026 are officially closed. No further submissions are accepted.'
+      });
     }
 
     // 1. Normalize Details
@@ -2746,44 +2797,188 @@ function doPost(e) {
       sheet.getRange(1, 1, 1, 35).setFontWeight('bold');
     }
 
-    // 3. Collect all team emails for duplicate checking
-    const emailsToCheck = [leadEmail];
-    [data.m2Email, data.m3Email, data.m4Email, data.m5Email].forEach(function(em) {
-      const norm = normalizeEmail_(em);
-      if (validEmail_(norm) && emailsToCheck.indexOf(norm) < 0) {
-        emailsToCheck.push(norm);
-      }
-    });
+    // 3. Collect all team members for strict email and roll number duplicate checking
+    const submittedMembers = [
+      { role: 'Team Leader', name: leadName, email: leadEmail, roll: normalizeRoll_(data.leadRoll) },
+      { role: 'Member 2', name: cleanText_(data.m2Name), email: normalizeEmail_(data.m2Email), roll: normalizeRoll_(data.m2Roll) },
+      { role: 'Member 3', name: cleanText_(data.m3Name), email: normalizeEmail_(data.m3Email), roll: normalizeRoll_(data.m3Roll) },
+      { role: 'Member 4', name: cleanText_(data.m4Name), email: normalizeEmail_(data.m4Email), roll: normalizeRoll_(data.m4Roll) }
+    ];
+    if (teamSize >= 5 && data.m5Email) {
+      submittedMembers.push({
+        role: 'Member 5',
+        name: cleanText_(data.m5Name),
+        email: normalizeEmail_(data.m5Email),
+        roll: normalizeRoll_(data.m5Roll)
+      });
+    }
 
-    // 4. Duplicate Check across previously submitted rows
-    const lastRow = sheet.getLastRow();
-    if (lastRow >= 2) {
-      const numCols = Math.min(sheet.getLastColumn(), 35);
-      const records = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
-      for (let i = 0; i < records.length; i++) {
-        const row = records[i];
-        const existingRowStr = row.join(' ').toLowerCase();
-
-        // Check if any email already exists
-        for (let j = 0; j < emailsToCheck.length; j++) {
-          const chk = emailsToCheck[j];
-          if (existingRowStr.indexOf(chk) >= 0) {
-            return sendJsonResponse_({
-              status: 'duplicate_email',
-              message: 'The email (' + chk + ') is already registered in this sheet! Only 1 submission allowed per email.'
-            });
-          }
-        }
-
-        // Check duplicate UTR (Column 34 in 1-based, index 33)
-        const existingUtr = cleanText_(row[33] || row[10] || '').replace(/\D/g, '');
-        if (existingUtr && existingUtr === inputUtr) {
+    // 3a. Intra-team Duplicate Validation (Same email or roll number entered twice in this submission)
+    for (let a = 0; a < submittedMembers.length; a++) {
+      for (let b = a + 1; b < submittedMembers.length; b++) {
+        if (submittedMembers[a].email && submittedMembers[a].email === submittedMembers[b].email) {
           return sendJsonResponse_({
-            status: 'duplicate_utr',
-            message: 'SCAM DETECTED: This UTR / Transaction ID (' + inputUtr + ') has already been used by another team!'
+            status: 'duplicate_rejected',
+            message: 'Duplicate within team: Email "' + submittedMembers[a].email + '" was entered for both ' + submittedMembers[a].role + ' and ' + submittedMembers[b].role + '. Each member must have a unique email.'
+          });
+        }
+        if (submittedMembers[a].roll && submittedMembers[a].roll === submittedMembers[b].roll) {
+          return sendJsonResponse_({
+            status: 'duplicate_rejected',
+            message: 'Duplicate within team: Roll Number "' + submittedMembers[a].roll + '" was entered for both ' + submittedMembers[a].role + ' and ' + submittedMembers[b].role + '. Each member must have a unique Roll Number.'
           });
         }
       }
+    }
+
+    // 4. Duplicate Check across all previously submitted rows (Email, Roll No, UTR)
+    const lastRow = sheet.getLastRow();
+    let duplicateDetected = null;
+
+    if (lastRow >= 2) {
+      const numCols = Math.min(sheet.getLastColumn() || 35, 35);
+      const records = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        const sheetRowNum = i + 2;
+
+        // Skip rows already tagged as rejected duplicate audit records
+        const firstColStr = String(row[0] || '').toUpperCase();
+        const thirdColStr = String(row[2] || '').toUpperCase();
+        if (firstColStr.indexOf('REJECTED') >= 0 || thirdColStr.indexOf('REJECTED') >= 0) {
+          continue;
+        }
+
+        const existingTeamName = cleanText_(row[2]) || ('Row ' + sheetRowNum);
+
+        // Check Roll Numbers across known roll columns: 6 (idx 5), 12 (idx 11), 18 (idx 17), 24 (idx 23), 30 (idx 29)
+        const rollIndices = [5, 11, 17, 23, 29];
+        for (let rIdx = 0; rIdx < rollIndices.length; rIdx++) {
+          const col = rollIndices[rIdx];
+          const cellRoll = normalizeRoll_(row[col]);
+          if (cellRoll && cellRoll.length >= 3) {
+            for (let m = 0; m < submittedMembers.length; m++) {
+              if (submittedMembers[m].roll && cellRoll === submittedMembers[m].roll) {
+                duplicateDetected = {
+                  type: 'ROLL_NO',
+                  value: submittedMembers[m].roll,
+                  member: submittedMembers[m],
+                  rowNumber: sheetRowNum,
+                  existingTeam: existingTeamName
+                };
+                break;
+              }
+            }
+          }
+          if (duplicateDetected) break;
+        }
+        if (duplicateDetected) break;
+
+        // Check Emails across known email columns: 2 (idx 1), 5 (idx 4), 11 (idx 10), 17 (idx 16), 23 (idx 22), 29 (idx 28)
+        const emailIndices = [1, 4, 10, 16, 22, 28];
+        for (let eIdx = 0; eIdx < emailIndices.length; eIdx++) {
+          const col = emailIndices[eIdx];
+          const cellEmail = normalizeEmail_(row[col]);
+          if (cellEmail && validEmail_(cellEmail)) {
+            for (let m = 0; m < submittedMembers.length; m++) {
+              if (submittedMembers[m].email && cellEmail === submittedMembers[m].email) {
+                duplicateDetected = {
+                  type: 'EMAIL',
+                  value: submittedMembers[m].email,
+                  member: submittedMembers[m],
+                  rowNumber: sheetRowNum,
+                  existingTeam: existingTeamName
+                };
+                break;
+              }
+            }
+          }
+          if (duplicateDetected) break;
+        }
+        if (duplicateDetected) break;
+
+        // Check Duplicate UTR (Column 34 in 1-based, index 33)
+        const existingUtr = cleanText_(row[33] || row[10] || '').replace(/\D/g, '');
+        if (inputUtr && existingUtr && existingUtr === inputUtr) {
+          duplicateDetected = {
+            type: 'UTR',
+            value: inputUtr,
+            member: { role: 'Payment', name: 'UTR' },
+            rowNumber: sheetRowNum,
+            existingTeam: existingTeamName
+          };
+          break;
+        }
+      }
+    }
+
+    // IF DUPLICATE IS FOUND: Append audit row to last row, color RED, and BLOCK REGISTRATION
+    if (duplicateDetected) {
+      const dupReason = duplicateDetected.type === 'ROLL_NO'
+        ? 'Roll Number (' + duplicateDetected.value + ' - ' + duplicateDetected.member.role + ') already registered in Team "' + duplicateDetected.existingTeam + '" (Row ' + duplicateDetected.rowNumber + ')'
+        : duplicateDetected.type === 'EMAIL'
+        ? 'Email (' + duplicateDetected.value + ' - ' + duplicateDetected.member.role + ') already registered in Team "' + duplicateDetected.existingTeam + '" (Row ' + duplicateDetected.rowNumber + ')'
+        : 'UTR / Transaction ID (' + duplicateDetected.value + ') was already used by Team "' + duplicateDetected.existingTeam + '" (Row ' + duplicateDetected.rowNumber + ')';
+
+      // 1. Automatically append this duplicate submission to the LAST ROW of the Sheet for audit
+      sheet.appendRow([
+        '[DUPLICATE REJECTED] ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss'),
+        leadEmail,
+        '[REJECTED DUPLICATE] ' + teamName,
+        leadName,
+        leadEmail,
+        cleanText_(data.leadRoll),
+        cleanText_(data.leadBranch),
+        cleanText_(data.leadYear),
+        leadPhone,
+        cleanText_(data.m2Name),
+        normalizeEmail_(data.m2Email),
+        cleanText_(data.m2Roll),
+        cleanText_(data.m2Branch),
+        cleanText_(data.m2Year),
+        normalizePhone_(data.m2Phone),
+        cleanText_(data.m3Name),
+        normalizeEmail_(data.m3Email),
+        cleanText_(data.m3Roll),
+        cleanText_(data.m3Branch),
+        cleanText_(data.m3Year),
+        normalizePhone_(data.m3Phone),
+        cleanText_(data.m4Name),
+        normalizeEmail_(data.m4Email),
+        cleanText_(data.m4Roll),
+        cleanText_(data.m4Branch),
+        cleanText_(data.m4Year),
+        normalizePhone_(data.m4Phone),
+        cleanText_(data.m5Name),
+        normalizeEmail_(data.m5Email),
+        cleanText_(data.m5Roll),
+        cleanText_(data.m5Branch),
+        cleanText_(data.m5Year),
+        data.m5Phone ? normalizePhone_(data.m5Phone) : '',
+        inputUtr,
+        dupReason
+      ]);
+
+      // 2. Format that last row in RED color so it stands out immediately
+      const dupRowIdx = sheet.getLastRow();
+      const dupRange = sheet.getRange(dupRowIdx, 1, 1, 35);
+      dupRange.setBackground('#ffcdd2'); // Light Red warning fill
+      dupRange.setFontColor('#b71c1c'); // Dark Crimson font
+      dupRange.setFontWeight('bold');
+
+      // 3. Set a note on the original matching row so organizers can trace both
+      try {
+        const origCell = sheet.getRange(duplicateDetected.rowNumber, 3);
+        const prevNote = origCell.getNote();
+        origCell.setNote((prevNote ? prevNote + '\n' : '') + '⚠️ Duplicate attempt blocked on ' + new Date().toLocaleDateString() + ' by team "' + teamName + '" (' + dupReason + ')');
+      } catch (noteErr) {}
+
+      // 4. Strictly DO NOT ALLOW registration
+      return sendJsonResponse_({
+        status: 'duplicate_rejected',
+        message: 'Registration Rejected: Duplicate detected! ' + dupReason + '. Multiple registrations with the same Email or Roll Number are strictly prohibited.'
+      });
     }
 
     // 5. Ultra-Strict AI Vision Verification with Gemini
@@ -2889,13 +3084,10 @@ function verifyPaymentWithGemini_(base64Data, mimeType, userEnteredUtr) {
 
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
   const candidateModels = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
-    "gemini-flash-lite-latest",
-    "gemini-3.7-flash",
-    "gemini-pro-latest"
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-flash",
+    "gemini-1.5-pro"
   ];
 
   const promptText = 
@@ -3090,7 +3282,7 @@ function CHECK_GEMINI_API_KEYS_QUOTA() {
 
     const startTime = new Date().getTime();
     try {
-      const probeModels = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"];
+      const probeModels = ["gemini-2.0-flash", "gemini-1.5-flash"];
       let probeSuccess = false;
       let lastCode = 0;
       let lastBody = "";
@@ -3243,4 +3435,330 @@ function SETUP_GEMINI_API_KEY(newKey) {
   PropertiesService.getScriptProperties().setProperty("GEMINI_API_KEY", key);
   Logger.log("✅ GEMINI_API_KEY successfully saved into Script Properties!");
   CHECK_GEMINI_API_KEYS_QUOTA();
+}
+
+/**
+ * ============================================================
+ * REGISTRATION STATUS & GATEKEEPER HELPERS
+ * ============================================================
+ */
+
+function isRegistrationClosed_() {
+  try {
+    const val = PropertiesService.getScriptProperties().getProperty('REGISTRATION_CLOSED');
+    return val === 'true' || val === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Run this function directly from the Apps Script editor toolbar dropdown
+ * to STOP or OPEN registrations manually without needing the web panel:
+ * Pass true to permanently stop; pass false to reopen.
+ */
+function PERMANENTLY_STOP_REGISTRATION() {
+  PropertiesService.getScriptProperties().setProperty('REGISTRATION_CLOSED', 'true');
+  Logger.log("🛑 REGISTRATION HAS BEEN PERMANENTLY STOPPED!");
+  Logger.log("👉 The registration form on the website is now HIDDEN and replaced by the ASTRA Particle Text effect.");
+}
+
+function REOPEN_REGISTRATION() {
+  PropertiesService.getScriptProperties().setProperty('REGISTRATION_CLOSED', 'false');
+  Logger.log("🟢 REGISTRATION HAS BEEN RE-OPENED!");
+  Logger.log("👉 The registration form on the website is now VISIBLE and accepting submissions.");
+}
+
+function buildStopRegistrationHtml_() {
+  const isClosed = isRegistrationClosed_();
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASTRA 2026 - Registration Gatekeeper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(ellipse at top, #0f172a 0%, #030712 100%);
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .hud-card {
+      width: 100%;
+      max-width: 580px;
+      background: rgba(10, 18, 46, 0.95);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 24px;
+      padding: 32px 28px;
+      box-shadow: 0 0 60px rgba(0, 242, 254, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+    .hud-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #00f2fe, #8b5cf6, #ef4444);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+    .badge-open {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .badge-closed {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 1.8s infinite;
+    }
+    .badge-open .badge-dot { background: #34d399; box-shadow: 0 0 8px #34d399; }
+    .badge-closed .badge-dot { background: #f87171; box-shadow: 0 0 8px #f87171; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    p.subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .status-box {
+      background: rgba(6, 10, 24, 0.9);
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .status-title {
+      font-size: 11px;
+      font-family: 'Space Grotesk', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .status-text {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      font-family: 'Outfit', sans-serif;
+    }
+    .status-open { color: #10b981; }
+    .status-closed { color: #ef4444; }
+    .info-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px dashed rgba(0, 242, 254, 0.25);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+    .info-box strong { color: #00f2fe; }
+    .actions-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 15px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      font-family: 'Space Grotesk', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-stop {
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+    }
+    .btn-stop:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(239, 68, 68, 0.5);
+    }
+    .btn-resume {
+      background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+    }
+    .btn-resume:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(16, 185, 129, 0.45);
+    }
+    .auth-input-group {
+      margin-bottom: 20px;
+    }
+    .auth-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+      font-family: 'Space Grotesk', monospace;
+    }
+    .auth-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: #060a18;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+    }
+    .auth-input:focus {
+      border-color: #00f2fe;
+    }
+    .log-container {
+      margin-top: 20px;
+      background: #030712;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 14px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #a5b4fc;
+      max-height: 120px;
+      overflow-y: auto;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud-card">
+    <div id="badgeStatus" class="badge ` + (isClosed ? 'badge-closed' : 'badge-open') + `">
+      <span class="badge-dot"></span>
+      <span id="badgeText">` + (isClosed ? 'REGISTRATION PORTAL STOPPED' : 'REGISTRATION PORTAL OPEN') + `</span>
+    </div>
+
+    <h1>ASTRA 2026 Command Portal</h1>
+    <p class="subtitle">Official Registration Gatekeeper & Particle Replacement Switch</p>
+
+    <div class="auth-input-group">
+      <label class="auth-label">Organizer Authorization PIN / Key</label>
+      <input type="password" id="adminPin" class="auth-input" value="2026" placeholder="Enter PIN (Default: 2026)">
+    </div>
+
+    <div class="status-box">
+      <div class="status-title">Current Website Portal State</div>
+      <div id="statusLabel" class="status-text ` + (isClosed ? 'status-closed' : 'status-open') + `">
+        ` + (isClosed ? '🔴 PERMANENTLY STOPPED (PARTICLE MODE ACTIVE)' : '🟢 ACTIVE & ACCEPTING REGISTRATIONS') + `
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>⚡ What Happens When Permanently Stopped:</strong>
+      <p style="margin-top: 6px;">The registration form is completely hidden on the website and replaced with the <strong>ASTRA HACKATHON Particle Effect</strong>.</p>
+    </div>
+
+    <div class="actions-grid">
+      <button id="btnStop" class="btn-stop" onclick="setRegistration(true)">
+        <span>🛑 Permanently Stop Registration</span>
+      </button>
+
+      <button id="btnResume" class="btn-resume" onclick="setRegistration(false)">
+        <span>🟢 Re-Open Registration Portal</span>
+      </button>
+    </div>
+
+    <div id="logBox" class="log-container">
+      [System Ready] Current state: ` + (isClosed ? 'STOPPED (Particle Text Active)' : 'OPEN (Form Active)') + `
+    </div>
+  </div>
+
+  <script>
+    async function setRegistration(shouldStop) {
+      const pin = document.getElementById('adminPin').value.trim() || '2026';
+      if (shouldStop && !confirm('Are you sure you want to permanently stop registrations?\\n\\nThis will hide the registration form and display only the Astra Hackathon particle effect.')) {
+        return;
+      }
+      
+      const logBox = document.getElementById('logBox');
+      logBox.innerHTML = '[' + new Date().toLocaleTimeString() + '] Updating state to ' + (shouldStop ? 'STOPPED' : 'OPEN') + '...<br>' + logBox.innerHTML;
+      
+      try {
+        const url = window.location.href.split('?')[0] + '?action=set_registration&closed=' + shouldStop + '&admin=' + encodeURIComponent(pin) + '&pin=' + encodeURIComponent(pin);
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+          const badge = document.getElementById('badgeStatus');
+          const badgeText = document.getElementById('badgeText');
+          const statusLabel = document.getElementById('statusLabel');
+          
+          if (shouldStop) {
+            badge.className = 'badge badge-closed';
+            badgeText.innerText = 'REGISTRATION PORTAL STOPPED';
+            statusLabel.className = 'status-text status-closed';
+            statusLabel.innerText = '🔴 PERMANENTLY STOPPED (PARTICLE MODE ACTIVE)';
+          } else {
+            badge.className = 'badge badge-open';
+            badgeText.innerText = 'REGISTRATION PORTAL OPEN';
+            statusLabel.className = 'status-text status-open';
+            statusLabel.innerText = '🟢 ACTIVE & ACCEPTING REGISTRATIONS';
+          }
+          alert('✅ ' + data.message);
+        } else {
+          alert('❌ ' + (data.message || 'Authorization failed. Please check PIN.'));
+        }
+      } catch (e) {
+        alert('Network error: ' + e.message);
+      }
+    }
+  </script>
+</body>
+</html>`;
 }

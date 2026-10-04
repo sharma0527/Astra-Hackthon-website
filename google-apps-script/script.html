@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASTRA 2026 - Registration Control Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(ellipse at top, #0f172a 0%, #030712 100%);
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .hud-card {
+      width: 100%;
+      max-width: 580px;
+      background: rgba(10, 18, 46, 0.95);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 24px;
+      padding: 32px 28px;
+      box-shadow: 0 0 60px rgba(0, 242, 254, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+    .hud-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #00f2fe, #8b5cf6, #ef4444);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+    .badge-open {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .badge-closed {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 1.8s infinite;
+    }
+    .badge-open .badge-dot { background: #34d399; box-shadow: 0 0 8px #34d399; }
+    .badge-closed .badge-dot { background: #f87171; box-shadow: 0 0 8px #f87171; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    p.subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .status-box {
+      background: rgba(6, 10, 24, 0.9);
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .status-title {
+      font-size: 11px;
+      font-family: 'Space Grotesk', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .status-text {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      font-family: 'Outfit', sans-serif;
+    }
+    .status-open { color: #10b981; }
+    .status-closed { color: #ef4444; }
+    .info-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px dashed rgba(0, 242, 254, 0.25);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+    .info-box strong { color: #00f2fe; }
+    .info-box ul { padding-left: 18px; margin-top: 8px; }
+    .info-box li { margin-bottom: 4px; }
+    .actions-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 15px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      font-family: 'Space Grotesk', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-stop {
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+    }
+    .btn-stop:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(239, 68, 68, 0.5);
+      filter: brightness(1.1);
+    }
+    .btn-resume {
+      background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+    }
+    .btn-resume:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(16, 185, 129, 0.45);
+    }
+    .btn-site {
+      background: #0b1329;
+      color: #00f2fe;
+      border: 1px solid rgba(0, 242, 254, 0.4);
+    }
+    .btn-site:hover {
+      background: rgba(0, 242, 254, 0.1);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    .auth-input-group {
+      margin-bottom: 20px;
+    }
+    .auth-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+      font-family: 'Space Grotesk', monospace;
+    }
+    .auth-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: #060a18;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .auth-input:focus {
+      border-color: #00f2fe;
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+    }
+    .log-container {
+      margin-top: 20px;
+      background: #030712;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 14px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #a5b4fc;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.5;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud-card">
+    <div id="badgeStatus" class="badge badge-open">
+      <span class="badge-dot"></span>
+      <span id="badgeText">REGISTRATION PORTAL OPEN</span>
+    </div>
+
+    <h1>ASTRA 2026 Command Portal</h1>
+    <p class="subtitle">Official Registration Gatekeeper & Particle Replacement Switch</p>
+
+    <div class="auth-input-group">
+      <label class="auth-label">Organizer Authorization PIN / Key</label>
+      <input type="password" id="adminPin" class="auth-input" value="2026" placeholder="Enter PIN (Default: 2026)">
+    </div>
+
+    <div class="status-box">
+      <div class="status-title">Current Website Portal State</div>
+      <div id="statusLabel" class="status-text status-open">PORTAL ACTIVE & ACCEPTING TEAMS</div>
+    </div>
+
+    <div class="info-box">
+      <strong>⚡ What Happens When Permanently Stopped:</strong>
+      <ul>
+        <li>The entire registration form (Steps 1–3, inputs, UPI QR) is <strong>completely hidden</strong> on the live website.</li>
+        <li>In its place, the interactive <strong>ASTRA HACKATHON Particle Text Effect</strong> will be prominently displayed.</li>
+        <li>Any direct network submission attempts will be strictly rejected with a "Registrations Closed" message.</li>
+      </ul>
+    </div>
+
+    <div class="actions-grid">
+      <button id="btnStop" class="btn-stop" onclick="setRegistrationStatus(true)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/></svg>
+        <span>🛑 Permanently Stop Registration</span>
+      </button>
+
+      <button id="btnResume" class="btn-resume" onclick="setRegistrationStatus(false)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>🟢 Re-Open Registration Portal</span>
+      </button>
+
+      <button class="btn-site" onclick="openWebsite()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        <span>View Live Website (Particle Mode)</span>
+      </button>
+    </div>
+
+    <div id="logBox" class="log-container">
+      [System Ready] Checking live registration portal status...
+    </div>
+  </div>
+
+  <script>
+    // Fallback URL if running standalone outside of Apps Script
+    const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbydvjtg3AVUs1Ud4mC9cIZeTAI4gcM4xJgeSwnhDCkem5RYC7qioBehmUhSliqL_jCGvw/exec";
+
+    function log(msg) {
+      const box = document.getElementById('logBox');
+      const time = new Date().toLocaleTimeString();
+      box.innerHTML = '[' + time + '] ' + msg + '<br>' + box.innerHTML;
+    }
+
+    function getApiUrl() {
+      // If served directly from Google Apps Script Web App
+      if (window.location.href.indexOf('/exec') > 0) {
+        return window.location.href.split('?')[0];
+      }
+      return DEFAULT_API_URL;
+    }
+
+    async function checkStatus() {
+      try {
+        const url = getApiUrl() + '?action=registration_status&t=' + Date.now();
+        const res = await fetch(url);
+        const data = await res.json();
+        updateUI(Boolean(data.registrationClosed));
+        log('Live state synchronized: ' + (data.registrationClosed ? 'CLOSED (Particle Mode)' : 'OPEN'));
+      } catch (err) {
+        // Fallback to local storage if running standalone
+        const local = localStorage.getItem('astra_registration_closed') === 'true';
+        updateUI(local);
+        log('Offline check: ' + (local ? 'CLOSED' : 'OPEN'));
+      }
+    }
+
+    function updateUI(isClosed) {
+      const badge = document.getElementById('badgeStatus');
+      const badgeText = document.getElementById('badgeText');
+      const statusLabel = document.getElementById('statusLabel');
+
+      if (isClosed) {
+        badge.className = 'badge badge-closed';
+        badgeText.innerText = 'REGISTRATION PORTAL STOPPED';
+        statusLabel.className = 'status-text status-closed';
+        statusLabel.innerText = '🔴 PERMANENTLY STOPPED (PARTICLE MODE ACTIVE)';
+      } else {
+        badge.className = 'badge badge-open';
+        badgeText.innerText = 'REGISTRATION PORTAL OPEN';
+        statusLabel.className = 'status-text status-open';
+        statusLabel.innerText = '🟢 ACTIVE & ACCEPTING REGISTRATIONS';
+      }
+    }
+
+    async function setRegistrationStatus(shouldStop) {
+      const pin = document.getElementById('adminPin').value.trim() || '2026';
+      
+      if (shouldStop) {
+        const confirmed = confirm('⚠️ ARE YOU ABSOLUTELY SURE?\n\nThis will permanently stop registrations on the website:\n- The registration form will be fully hidden.\n- It will be replaced with the ASTRA Hackathon Particle effect.\n- No more applications will be accepted.');
+        if (!confirmed) return;
+      }
+
+      const btnStop = document.getElementById('btnStop');
+      const btnResume = document.getElementById('btnResume');
+      btnStop.disabled = true;
+      btnResume.disabled = true;
+
+      log('Sending command to backend: ' + (shouldStop ? 'STOP REGISTRATION' : 'RE-OPEN REGISTRATION') + '...');
+
+      try {
+        const url = getApiUrl() + '?action=set_registration&closed=' + (shouldStop ? 'true' : 'false') + '&pin=' + encodeURIComponent(pin) + '&admin=' + encodeURIComponent(pin);
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.status === 'success') {
+          updateUI(shouldStop);
+          try {
+            localStorage.setItem('astra_registration_closed', String(shouldStop));
+            window.dispatchEvent(new Event('registrationStatusChange'));
+          } catch (e) {}
+
+          log('✅ SUCCESS: ' + data.message);
+          alert('✅ ' + data.message + '\n\nThe registration form on the website is now ' + (shouldStop ? 'HIDDEN and replaced by the ASTRA particle text effect.' : 'OPEN and visible.'));
+        } else {
+          log('❌ ERROR: ' + (data.message || 'Operation failed. Check PIN.'));
+          alert('❌ Error: ' + (data.message || 'Authorization failed. Please enter the correct PIN (default: 2026).'));
+        }
+      } catch (err) {
+        log('Network error: Setting local fallback...');
+        localStorage.setItem('astra_registration_closed', String(shouldStop));
+        updateUI(shouldStop);
+        alert('Status updated locally to ' + (shouldStop ? 'STOPPED' : 'OPEN') + ' (Network note: ' + err.message + ')');
+      } finally {
+        btnStop.disabled = false;
+        btnResume.disabled = false;
+      }
+    }
+
+    function openWebsite() {
+      // Check if open in localhost or production
+      window.open('https://astra-hackthon-website.vercel.app/#register', '_blank');
+    }
+
+    // Auto-check on load
+    window.onload = checkStatus;
+  </script>
+</body>
+</html>

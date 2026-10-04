@@ -81,7 +81,59 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
     }
   });
 
+  const [isRegistrationClosed, setIsRegistrationClosed] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('closed') === '1' || urlParams.get('stop') === '1') {
+          return true;
+        }
+        return localStorage.getItem('astra_registration_closed') === 'true';
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  });
+
   const parsedSize = parseInt(formData.teamSize, 10);
+
+  useEffect(() => {
+    // 1. Fetch live registration portal status from Apps Script API
+    let isMounted = true;
+    const checkLiveRegistrationStatus = async () => {
+      try {
+        const res = await fetch(`${paymentConfig.appsScriptUrl}?action=registration_status&t=${Date.now()}`);
+        const data = await res.json();
+        if (isMounted && data && typeof data.registrationClosed === 'boolean') {
+          setIsRegistrationClosed(data.registrationClosed);
+          try {
+            localStorage.setItem('astra_registration_closed', String(data.registrationClosed));
+          } catch {}
+        }
+      } catch (err) {
+        // Fallback: keep current local state
+      }
+    };
+    checkLiveRegistrationStatus();
+
+    // 2. Listen for cross-tab or in-page status toggles
+    const handleStatusSync = () => {
+      try {
+        const val = localStorage.getItem('astra_registration_closed') === 'true';
+        setIsRegistrationClosed(val);
+      } catch {}
+    };
+
+    window.addEventListener('storage', handleStatusSync);
+    window.addEventListener('registrationStatusChange', handleStatusSync);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStatusSync);
+      window.removeEventListener('registrationStatusChange', handleStatusSync);
+    };
+  }, []);
 
   useEffect(() => {
     if (savedRegistration) {
@@ -114,7 +166,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxDim = 1280;
+          const maxDim = 960;
 
           if (width > maxDim || height > maxDim) {
             if (width > height) {
@@ -131,7 +183,7 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
 
-          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          const compressed = canvas.toDataURL('image/jpeg', 0.75);
           setScreenshotBase64(compressed);
           setScreenshotMime('image/jpeg');
         };
@@ -277,6 +329,28 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
       }
     }
 
+    // 6.5 Validate Intra-team Uniqueness (No duplicate emails or roll numbers within the same team)
+    const teamCheckMembers = [
+      { role: 'Team Leader', email: formData.leadEmail.trim().toLowerCase(), roll: formData.leadRoll.trim().replace(/\s+/g, '').toUpperCase() },
+      { role: 'Member 2', email: formData.m2Email.trim().toLowerCase(), roll: formData.m2Roll.trim().replace(/\s+/g, '').toUpperCase() },
+      { role: 'Member 3', email: formData.m3Email.trim().toLowerCase(), roll: formData.m3Roll.trim().replace(/\s+/g, '').toUpperCase() },
+      { role: 'Member 4', email: formData.m4Email.trim().toLowerCase(), roll: formData.m4Roll.trim().replace(/\s+/g, '').toUpperCase() },
+      ...(parsedSize >= 5 ? [{ role: 'Member 5', email: formData.m5Email.trim().toLowerCase(), roll: formData.m5Roll.trim().replace(/\s+/g, '').toUpperCase() }] : [])
+    ];
+
+    for (let i = 0; i < teamCheckMembers.length; i++) {
+      for (let j = i + 1; j < teamCheckMembers.length; j++) {
+        if (teamCheckMembers[i].email && teamCheckMembers[i].email === teamCheckMembers[j].email) {
+          setErrorMsg(`Duplicate Email detected: "${teamCheckMembers[i].email}" is entered for both ${teamCheckMembers[i].role} and ${teamCheckMembers[j].role}. Each member must have a unique email.`);
+          return;
+        }
+        if (teamCheckMembers[i].roll && teamCheckMembers[i].roll === teamCheckMembers[j].roll) {
+          setErrorMsg(`Duplicate Roll Number detected: "${teamCheckMembers[i].roll}" is entered for both ${teamCheckMembers[i].role} and ${teamCheckMembers[j].role}. Each member must have a unique Roll Number.`);
+          return;
+        }
+      }
+    }
+
     // 7. Validate Payment
     const cleanUtr = formData.utrNumber.trim().replace(/\D/g, '');
     if (!cleanUtr || cleanUtr.length < 10) {
@@ -348,7 +422,13 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
         data = JSON.parse(responseText);
       } catch (parseErr) {
         if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-          setErrorMsg('Apps Script is running an outdated deployment. Please update Apps Script: Deploy ➔ Manage deployments ➔ Edit ➔ New version ➔ Deploy.');
+          if (responseText.includes('Script function not found')) {
+            setErrorMsg('Google Apps Script error: Function "doPost" is missing in the active deployment. Open Google Apps Script: Deploy ➔ Manage deployments ➔ Edit ➔ New version ➔ Deploy.');
+          } else if (responseText.includes('unable to open the file') || responseText.includes('Page not found')) {
+            setErrorMsg('Google Apps Script connection timeout or permission error. In Apps Script, verify "Who has access" is set to "Anyone", deploy a New Version, and retry.');
+          } else {
+            setErrorMsg('Apps Script returned an HTML page instead of JSON. Please update Apps Script: Deploy ➔ Manage deployments ➔ Edit ➔ New version ➔ Deploy.');
+          }
           setLoading(false);
           return;
         }
@@ -379,6 +459,90 @@ export const RegistrationSection: React.FC<RegistrationSectionProps> = ({ onGoTo
 
   const branchOptions = ['CSE', 'ECE', 'AIML', 'DS', 'IT', 'EEE', 'MECH', 'CIVIL', 'DIPLOMA', 'OTHER'];
   const yearOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+
+  // =========================================================================
+  // VIEW 0: REGISTRATION PERMANENTLY STOPPED -> HIDE FORM & SHOW PARTICLE EFFECT
+  // =========================================================================
+  if (isRegistrationClosed) {
+    return (
+      <section className="py-16 md:py-24 px-4 sm:px-6 relative z-10" id="register">
+        <div className="max-w-5xl mx-auto">
+          {/* Main Card with Glowing Cyber Glass */}
+          <div className="cyber-glass-card hud-brackets rounded-3xl p-6 sm:p-12 border border-red-500/40 shadow-[0_0_90px_rgba(239,68,68,0.22)] text-center relative overflow-hidden bg-[#060a18]/95 font-sans">
+            
+            {/* Top Closed Notice Header */}
+            <div className="flex items-center justify-center mb-6">
+              <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-red-500/15 border border-red-500/50 text-red-400 text-xs font-bold uppercase tracking-wider shadow-[0_0_25px_rgba(239,68,68,0.25)] font-mono">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                <span>REGISTRATIONS OFFICIALLY CLOSED • SELECTION ACTIVE</span>
+              </div>
+            </div>
+
+            {/* Dazzling Interactive ParticleText Canvas showing only ASTRA HACKATHON in the replaced place of the form */}
+            <div className="w-full h-[300px] sm:h-[380px] md:h-[450px] rounded-2xl overflow-hidden relative my-4 bg-[#050713]/90 border border-[#00f2fe]/30 shadow-[inset_0_0_60px_rgba(0,0,0,0.85)] flex items-center justify-center">
+              <div className="absolute top-3 left-4 text-[10px] sm:text-xs font-mono text-[#00f2fe]/75 tracking-widest uppercase flex items-center gap-1.5 pointer-events-none z-10">
+                <Sparkles className="w-3.5 h-3.5 text-[#00f2fe] animate-pulse" />
+                <span>ASTRA Particle Canvas • Move cursor / touch canvas</span>
+              </div>
+
+              <ParticleText
+                text="ASTRA HACKATHON"
+                particleSize={2.4}
+                density={4}
+                color="#00f2fe"
+                highlightColor="#8b5cf6"
+                scatter={190}
+                gatherDuration={1600}
+                stagger={420}
+                pointerRepel={45}
+                repelRadius={130}
+                idleDrift={0.8}
+                trigger="mount"
+                fontSize="clamp(2.4rem, 8vw, 6rem)"
+                fontWeight={900}
+                fontFamily="inherit"
+                glow={true}
+              />
+            </div>
+
+            {/* Headline and details */}
+            <div className="mt-8 mb-8 max-w-2xl mx-auto">
+              <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mb-3 font-display">
+                ASTRA Hackathon 2026
+              </h2>
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-sans">
+                Registrations for collegiate student teams are now officially closed. All team slots have been fulfilled and shortlisted squads are advancing to the offline grand finale at{' '}
+                <span className="text-[#00f2fe] font-semibold">NRI Institute of Technology</span>.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-4 border-t border-white/10 max-w-xl mx-auto">
+              {onGoToTrack && (
+                <button
+                  type="button"
+                  onClick={onGoToTrack}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-black font-extrabold text-xs uppercase tracking-wider hover:brightness-110 transition shadow-[0_0_25px_rgba(0,242,254,0.4)]"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Track Application Status</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+              <a
+                href="#about"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-[#0a122e] border border-[#00f2fe]/40 text-cyan-300 font-bold text-xs uppercase tracking-wider hover:bg-[#00f2fe]/10 transition"
+              >
+                <Home className="w-4 h-4" />
+                <span>Explore Event Overview</span>
+              </a>
+            </div>
+
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   // =========================================================================
   // VIEW 1: REGISTRATION COMPLETED -> SHOW ASTRA HACKATHON PARTICLE TEXT
